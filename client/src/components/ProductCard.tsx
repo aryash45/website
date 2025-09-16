@@ -4,18 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, ShoppingCart } from "lucide-react";
 
-export interface Product {
-  id: string;
-  name: string;
+import { type Product as DBProduct } from "@shared/schema";
+
+export interface Product extends Omit<DBProduct, 'price' | 'originalPrice'> {
   price: number;
   originalPrice?: number;
-  image: string;
-  category: string;
-  ageGroup: string;
-  sizes: string[];
-  inStock: boolean;
-  isNew?: boolean;
-  discount?: number;
+  image: string; // Will use first image from images array
 }
 
 interface ProductCardProps {
