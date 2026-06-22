@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { fileURLToPath } from "url";
 import { db } from "./db";
-import { products, users } from "@shared/schema";
+import { products, users } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "./auth";
 

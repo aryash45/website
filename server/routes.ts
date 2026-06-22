@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { users, insertProductSchema, insertCartItemSchema, insertOrderSchema, insertSiteSettingsSchema, insertContentBlockSchema, insertReviewSchema } from "@shared/schema";
+import { users, insertProductSchema, insertCartItemSchema, insertOrderSchema, insertSiteSettingsSchema, insertContentBlockSchema, insertReviewSchema } from "../shared/schema";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
 import "./types"; // Import session types

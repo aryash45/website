@@ -5,7 +5,7 @@ import {
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type SiteSetting, type InsertSiteSetting, type ContentBlock, type InsertContentBlock,
   type Review, type InsertReview
-} from "@shared/schema";
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql } from "drizzle-orm";
 
