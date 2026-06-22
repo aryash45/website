@@ -5,18 +5,17 @@ import pgSession from "connect-pg-simple";
 import { registerRoutes } from "../server/routes.js";
 import { pool } from "../server/db.js";
 
-
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration with Postgres store
+// Session configuration — share the single pool instance with the session store
+// so connect-pg-simple doesn't open its own separate connections.
 const PgSession = pgSession(session);
 const usePgStore = Boolean(process.env.DATABASE_URL);
 
 const sessionSecret = process.env.SESSION_SECRET || "change-me-in-prod";
 
-// Create session store with error handler
 const store = usePgStore ? new PgSession({
   pool: pool,
   createTableIfMissing: true,
@@ -41,18 +40,16 @@ app.use(session({
   },
 }));
 
-// Route registration wrapper to handle async setup
-let routesRegistered = false;
-let routesPromise: Promise<any> | null = null;
+// Register routes eagerly at module load time.
+// Using a top-level promise ensures routes are attached before any request is handled.
+// In a serverless environment each cold start is a new module load, so this
+// effectively runs once per instance — which is the correct behaviour.
+const ready = registerRoutes(app);
 
-app.use(async (req, res, next) => {
-  if (!routesRegistered) {
-    if (!routesPromise) {
-      routesPromise = registerRoutes(app);
-    }
-    await routesPromise;
-    routesRegistered = true;
-  }
+// Block every incoming request until route registration completes.
+// This avoids the race where the first request arrives before registerRoutes resolves.
+app.use(async (_req, _res, next) => {
+  await ready;
   next();
 });
 
