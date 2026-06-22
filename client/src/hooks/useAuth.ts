@@ -42,7 +42,7 @@ export function useAuth() {
     fetchMe();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<User | null> => {
     try {
       const res = await apiRequest("POST", "/api/auth/login", { username, password });
       if (res.ok) {
@@ -50,12 +50,12 @@ export function useAuth() {
         setUser(userData);
         setIsAuthenticated(true);
         setIsAdmin(userData.role === "admin");
-        return true;
+        return userData;
       }
-      return false;
+      return null;
     } catch (error) {
       console.error("Login failed:", error);
-      return false;
+      return null;
     }
   };
 

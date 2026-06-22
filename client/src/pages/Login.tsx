@@ -34,10 +34,11 @@ export default function Login() {
     setError("");
     setIsLoading(true);
     try {
-      const success = await login(custUsername, custPassword);
-      if (success) {
+      const user = await login(custUsername, custPassword);
+      if (user) {
         toast({ title: "Welcome Back!", description: "Logged in successfully to your account." });
-        setLocation("/profile");
+        // Redirect admins to the admin dashboard, everyone else to profile
+        setLocation(user.role === "admin" ? "/admin" : "/profile");
       } else {
         setError("Invalid username or password");
       }
