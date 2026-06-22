@@ -5,6 +5,8 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
+import { pool } from "./db.js";
+
 
 const app = express();
 app.use(express.json());
@@ -23,7 +25,7 @@ if (sessionSecret === "change-me-in-prod") {
 }
 
 const store = usePgStore ? new PgSession({
-  conString: process.env.DATABASE_URL,
+  pool: pool,
   createTableIfMissing: true,
 }) : undefined;
 

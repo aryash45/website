@@ -3,6 +3,8 @@ import express from "express";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import { registerRoutes } from "../server/routes.js";
+import { pool } from "../server/db.js";
+
 
 const app = express();
 app.use(express.json());
@@ -16,7 +18,7 @@ const sessionSecret = process.env.SESSION_SECRET || "change-me-in-prod";
 
 // Create session store with error handler
 const store = usePgStore ? new PgSession({
-  conString: process.env.DATABASE_URL,
+  pool: pool,
   createTableIfMissing: true,
 }) : undefined;
 
