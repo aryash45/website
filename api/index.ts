@@ -6,6 +6,12 @@ import { registerRoutes } from "../server/routes.js";
 import { pool } from "../server/db.js";
 
 const app = express();
+
+// Trust Vercel's edge proxy so req.secure and req.ip are correct.
+// Without this, Express sees all requests as HTTP (Vercel terminates TLS at the edge)
+// and cookie.secure:true silently drops the Set-Cookie header.
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -33,7 +39,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true, // Vercel serves via HTTPS
+    // With trust proxy set above, req.secure is true on Vercel (HTTPS).
+    // secure:true means the browser only sends the cookie over HTTPS — correct for production.
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     sameSite: "lax",
     maxAge: 24 * 60 * 60 * 1000,
