@@ -14,11 +14,20 @@ const usePgStore = Boolean(process.env.DATABASE_URL);
 
 const sessionSecret = process.env.SESSION_SECRET || "change-me-in-prod";
 
+// Create session store with error handler
+const store = usePgStore ? new PgSession({
+  conString: process.env.DATABASE_URL,
+  createTableIfMissing: true,
+}) : undefined;
+
+if (store) {
+  store.on('error', (err) => {
+    console.error('[session store error]', err);
+  });
+}
+
 app.use(session({
-  store: usePgStore ? new PgSession({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }) : undefined,
+  store,
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,

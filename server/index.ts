@@ -22,11 +22,19 @@ if (sessionSecret === "change-me-in-prod") {
   console.warn("[SECURITY WARNING] SESSION_SECRET is using the default insecure value. Set a strong secret in your .env file!");
 }
 
+const store = usePgStore ? new PgSession({
+  conString: process.env.DATABASE_URL,
+  createTableIfMissing: true,
+}) : undefined;
+
+if (store) {
+  store.on('error', (err) => {
+    console.error('[session store error]', err);
+  });
+}
+
 app.use(session({
-  store: usePgStore ? new PgSession({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }) : undefined,
+  store,
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
