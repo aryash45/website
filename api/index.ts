@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
-import { registerRoutes } from "../server/routes";
+import { registerRoutes } from "../server/routes.js";
 
 const app = express();
 app.use(express.json());

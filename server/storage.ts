@@ -5,8 +5,8 @@ import {
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type SiteSetting, type InsertSiteSetting, type ContentBlock, type InsertContentBlock,
   type Review, type InsertReview
-} from "../shared/schema";
-import { db } from "./db";
+} from "../shared/schema.js";
+import { db } from "./db.js";
 import { eq, desc, and, sql } from "drizzle-orm";
 
 // Storage interface with all CRUD methods needed for e-commerce

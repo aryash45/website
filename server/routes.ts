@@ -1,14 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { users, insertProductSchema, insertCartItemSchema, insertOrderSchema, insertSiteSettingsSchema, insertContentBlockSchema, insertReviewSchema } from "../shared/schema";
+import { storage } from "./storage.js";
+import { users, insertProductSchema, insertCartItemSchema, insertOrderSchema, insertSiteSettingsSchema, insertContentBlockSchema, insertReviewSchema } from "../shared/schema.js";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
-import "./types"; // Import session types
-import { downloadImage } from "./services/download";
-import { classifyGarment } from "./services/gemini";
-import { hashPassword, comparePasswords } from "./auth";
-import { db } from "./db";
+import "./types.js"; // Import session types
+import { downloadImage } from "./services/download.js";
+import { classifyGarment } from "./services/gemini.js";
+import { hashPassword, comparePasswords } from "./auth.js";
+import { db } from "./db.js";
 import { eq } from "drizzle-orm";
 
 // ---------- Simple in-memory rate limiter for login endpoint ----------

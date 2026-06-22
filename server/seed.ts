@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { fileURLToPath } from "url";
-import { db } from "./db";
-import { products, users } from "../shared/schema";
+import { db } from "./db.js";
+import { products, users } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
-import { hashPassword } from "./auth";
+import { hashPassword } from "./auth.js";
 
 async function seedDatabase() {
   try {
