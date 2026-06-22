@@ -197,8 +197,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       req.session.userId = user.id;
-      
-      // Return user without password
+
+      // Explicitly save session before responding — critical on serverless where
+      // the process may exit before the auto-save hook fires.
+      await new Promise<void>((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve()))
+      );
+
       const { password: _, ...safeUser } = user;
       res.status(201).json(safeUser);
     } catch (error) {
@@ -230,6 +235,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
+
+      // Explicitly save session before responding — critical on serverless where
+      // the process may exit before express-session's auto-save hook fires.
+      await new Promise<void>((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve()))
+      );
+
       const { password: _, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
