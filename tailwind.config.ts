@@ -83,9 +83,10 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Poppins", "Open Sans", "sans-serif"],
+        sans: ["Outfit", "Open Sans", "sans-serif"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        outfit: ["Outfit", "sans-serif"],
         poppins: ["Poppins", "sans-serif"],
         "open-sans": ["Open Sans", "sans-serif"],
       },

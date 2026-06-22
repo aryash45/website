@@ -3,11 +3,34 @@ import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table (keeping existing structure)
+// Users table with enhanced roles for admin access
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").notNull().default("user"),
+  email: text("email").unique(),
+  phone: text("phone"),
+  addresses: jsonb("addresses").default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Site settings for global configuration
+export const siteSettings = pgTable("site_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: jsonb("value"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Content blocks for editable page content
+export const contentBlocks = pgTable("content_blocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  location: text("location").notNull(),
+  content: jsonb("content").notNull(),
+  active: boolean("active").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Products table
@@ -24,6 +47,8 @@ export const products = pgTable("products", {
   inStock: boolean("in_stock").notNull().default(true),
   isNew: boolean("is_new").notNull().default(false),
   discount: integer("discount"),
+  instagramPostId: text("instagram_post_id").unique(),
+  status: text("status").notNull().default("published"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -74,7 +99,29 @@ export const orderItems = pgTable("order_items", {
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
 });
 
+// Reviews table
+export const reviews = pgTable("reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  rating: integer("rating").notNull(),
+  content: text("content").notNull(),
+  isVerified: boolean("is_verified").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
+export const productsRelations = relations(products, ({ many }) => ({
+  reviews: many(reviews),
+}));
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  product: one(products, {
+    fields: [reviews.productId],
+    references: [products.id],
+  }),
+}));
+
 export const cartsRelations = relations(carts, ({ many }) => ({
   items: many(cartItems),
 }));
@@ -109,6 +156,8 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  email: true,
+  phone: true,
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
@@ -138,6 +187,11 @@ export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
   id: true,
 });
 
+export const insertReviewSchema = createInsertSchema(reviews).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -156,3 +210,24 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = z.infer<typeof insertReviewSchema>;
+
+// New schema validations for editable content
+export const insertSiteSettingsSchema = createInsertSchema(siteSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertContentBlockSchema = createInsertSchema(contentBlocks).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type SiteSetting = typeof siteSettings.$inferSelect;
+export type InsertSiteSetting = z.infer<typeof insertSiteSettingsSchema>;
+
+export type ContentBlock = typeof contentBlocks.$inferSelect;
+export type InsertContentBlock = z.infer<typeof insertContentBlockSchema>;
+

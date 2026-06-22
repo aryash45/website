@@ -1,5 +1,8 @@
+import "dotenv/config";
+import path from "path";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import pgSession from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -7,15 +10,32 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration
+// Serve uploaded images statically
+app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+
+// Session configuration with Postgres store
+const PgSession = pgSession(session);
+const usePgStore = Boolean(process.env.DATABASE_URL);
+
+const sessionSecret = process.env.SESSION_SECRET || "change-me-in-prod";
+if (sessionSecret === "change-me-in-prod") {
+  console.warn("[SECURITY WARNING] SESSION_SECRET is using the default insecure value. Set a strong secret in your .env file!");
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'mahajan-garments-secret',
+  store: usePgStore ? new PgSession({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+  }) : undefined,
+  secret: sessionSecret,
   resave: false,
-  saveUninitialized: true,
-  cookie: { 
-    secure: false, // Set to true in production with HTTPS
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+  saveUninitialized: false,
+  cookie: {
+    secure: app.get("env") === "production",
+    httpOnly: true,    // Prevents client-side JS from reading the session cookie (XSS protection)
+    sameSite: "lax",
+    maxAge: 24 * 60 * 60 * 1000,
+  },
 }));
 
 app.use((req, res, next) => {
@@ -55,8 +75,8 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    // Send error response without rethrowing to avoid crashing the process
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
@@ -76,7 +96,6 @@ app.use((req, res, next) => {
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });

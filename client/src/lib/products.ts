@@ -54,7 +54,7 @@ export function useAddToCart() {
 
 // Hook to fetch cart
 export function useCart() {
-  return useQuery({
+  return useQuery<any>({
     queryKey: ['/api/cart'],
   });
 }

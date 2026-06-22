@@ -20,7 +20,7 @@ export default function ProductGrid({
   hasMore = false,
   onAddToCart,
   onToggleFavorite,
-  favorites = new Set()
+  favorites
 }: ProductGridProps) {
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -62,7 +62,7 @@ export default function ProductGrid({
             product={product}
             onAddToCart={onAddToCart}
             onToggleFavorite={onToggleFavorite}
-            isFavorite={favorites.has(product.id)}
+            isFavorite={favorites?.has(product.id)}
           />
         ))}
       </div>

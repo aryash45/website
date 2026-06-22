@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoute } from "wouter";
 import Header from "@/components/Header";
 import ProductGrid from "@/components/ProductGrid";
 import Footer from "@/components/Footer";
 import ShoppingCart, { type CartItem } from "@/components/ShoppingCart";
-import { type Product } from "@/components/ProductCard";
+import CheckoutDialog from "@/components/CheckoutDialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,8 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import coralShirtImage from '@assets/generated_images/Kids_coral_t-shirt_product_a3912b82.png';
 import mintDressImage from '@assets/generated_images/Kids_mint_dress_product_59394fee.png';
 import yellowShortsImage from '@assets/generated_images/Kids_yellow_shorts_product_6ad599f2.png';
+import { parseFiltersFromQuery } from "@/shared/filters";
+import { useProducts, useCart, useAddToCart, useUpdateCartItem, useRemoveCartItem } from "@/lib/products";
 
-// todo: remove mock functionality
 const categoryData = {
   "0-2": {
     name: "Tiny Tots",
@@ -42,62 +43,75 @@ const categoryData = {
   }
 };
 
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "Coral Animal Print T-Shirt",
-    price: 899,
-    originalPrice: 1299,
-    image: coralShirtImage,
-    category: "T-Shirts",
-    ageGroup: "3-5 Years",
-    sizes: ["XS", "S", "M", "L"],
-    inStock: true,
-    isNew: true,
-    discount: 31
-  },
-  {
-    id: "2",
-    name: "Mint Green Floral Dress",
-    price: 1599,
-    image: mintDressImage,
-    category: "Dresses",
-    ageGroup: "6-8 Years",
-    sizes: ["S", "M", "L", "XL"],
-    inStock: true,
-    isNew: false
-  },
-  {
-    id: "3",
-    name: "Sunny Yellow Cotton Shorts",
-    price: 699,
-    originalPrice: 999,
-    image: yellowShortsImage,
-    category: "Shorts",
-    ageGroup: "2-4 Years",
-    sizes: ["XS", "S", "M"],
-    inStock: true,
-    isNew: false,
-    discount: 30
-  }
-];
-
 export default function CategoryPage() {
   const [match, params] = useRoute("/category/:category");
   const categoryId = params?.category as keyof typeof categoryData;
   const category = categoryData[categoryId];
   
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const { data: dbProducts = [], isLoading } = useProducts();
+  const { data: cartData } = useCart();
+  const addToCartMutation = useAddToCart();
+  const updateCartQuantityMutation = useUpdateCartItem();
+  const removeCartItemMutation = useRemoveCartItem();
+
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [sortBy, setSortBy] = useState("featured");
   const [filterByType, setFilterByType] = useState("all");
 
-  // Filter products by category
-  const categoryProducts = mockProducts.filter(product => {
-    const matchesAge = product.ageGroup.includes(categoryId?.replace('-', '-') || '');
+  // Map database session cart to frontend items
+  const cartItems: CartItem[] = (cartData?.items || []).map((item: any) => ({
+    id: item.id,
+    productId: item.productId,
+    name: item.product.name,
+    price: parseFloat(item.product.price),
+    size: item.size,
+    quantity: item.quantity,
+    image: item.product.images[0] || '',
+    ageGroup: item.product.ageGroup
+  }));
+
+  const cartSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartShipping = cartSubtotal >= 999 ? 0 : 99;
+  const cartTotal = cartSubtotal + cartShipping;
+
+  // Initialize filters from URL query string
+  useEffect(() => {
+    const filters = parseFiltersFromQuery(window.location.search);
+    if (filters.sort) setSortBy(filters.sort);
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get("type");
+    if (type) setFilterByType(type);
+  }, []);
+
+  // Keep URL in sync when filters change
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (filterByType && filterByType !== "all") params.set("type", filterByType); else params.delete("type");
+    if (sortBy && sortBy !== "featured") params.set("sort", sortBy); else params.delete("sort");
+    const newSearch = params.toString();
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ""}`;
+    window.history.replaceState(null, "", newUrl);
+  }, [sortBy, filterByType]);
+
+  if (!category) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header cartItemCount={0} />
+        <div className="container mx-auto px-4 py-12 text-center">
+          <h1 className="text-2xl font-bold mb-4">Category Not Found</h1>
+          <p className="text-muted-foreground">The category you're looking for doesn't exist.</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Filter products by category and sub-type
+  const categoryProducts = dbProducts.filter(product => {
+    const matchesAge = product.ageGroup.includes(category.ageRange);
     const matchesType = filterByType === "all" || product.category.toLowerCase().includes(filterByType.toLowerCase());
-    return matchesAge || matchesType;
+    return matchesAge && matchesType;
   });
 
   // Sort products
@@ -115,58 +129,10 @@ export default function CategoryPage() {
   });
 
   const handleAddToCart = (productId: string, size: string) => {
-    const product = mockProducts.find(p => p.id === productId);
-    if (!product) return;
-
-    const existingItem = cartItems.find(item => 
-      item.productId === productId && item.size === size
-    );
-
-    if (existingItem) {
-      setCartItems(prev => prev.map(item =>
-        item.id === existingItem.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      const newItem: CartItem = {
-        id: `cart-${Date.now()}-${productId}-${size}`,
-        productId,
-        name: product.name,
-        price: product.price,
-        size,
-        quantity: 1,
-        image: product.image,
-        ageGroup: product.ageGroup
-      };
-      setCartItems(prev => [...prev, newItem]);
-    }
+    addToCartMutation.mutate({ productId, size, quantity: 1 });
   };
 
-  const handleToggleFavorite = (productId: string) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(productId)) {
-        newFavorites.delete(productId);
-      } else {
-        newFavorites.add(productId);
-      }
-      return newFavorites;
-    });
-  };
 
-  if (!category) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header cartItemCount={0} />
-        <div className="container mx-auto px-4 py-12 text-center">
-          <h1 className="text-2xl font-bold mb-4">Category Not Found</h1>
-          <p className="text-muted-foreground">The category you're looking for doesn't exist.</p>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background" data-testid={`page-category-${categoryId}`}>
@@ -261,14 +227,22 @@ export default function CategoryPage() {
           </Card>
 
           {/* Products Grid */}
-          <ProductGrid
-            products={sortedProducts}
-            loading={false}
-            hasMore={false}
-            onAddToCart={handleAddToCart}
-            onToggleFavorite={handleToggleFavorite}
-            favorites={favorites}
-          />
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <span className="text-muted-foreground font-medium animate-pulse">Loading products...</span>
+            </div>
+          ) : sortedProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No products found in this category.</p>
+            </div>
+          ) : (
+            <ProductGrid
+              products={sortedProducts}
+              loading={false}
+              hasMore={false}
+              onAddToCart={handleAddToCart}
+            />
+          )}
         </div>
       </section>
 
@@ -281,17 +255,25 @@ export default function CategoryPage() {
         onClose={() => setIsCartOpen(false)}
         items={cartItems}
         onUpdateQuantity={(itemId, quantity) => {
-          setCartItems(prev => prev.map(item =>
-            item.id === itemId ? { ...item, quantity } : item
-          ));
+          updateCartQuantityMutation.mutate({ id: itemId, quantity });
         }}
         onRemoveItem={(itemId) => {
-          setCartItems(prev => prev.filter(item => item.id !== itemId));
+          removeCartItemMutation.mutate(itemId);
         }}
         onCheckout={() => {
-          console.log("Proceeding to checkout");
-          alert("Checkout functionality will be implemented in the full application!");
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
         }}
+      />
+
+      {/* Checkout Dialog */}
+      <CheckoutDialog
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        cartItems={cartItems}
+        subtotal={cartSubtotal}
+        shipping={cartShipping}
+        total={cartTotal}
       />
     </div>
   );

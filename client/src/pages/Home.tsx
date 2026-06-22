@@ -1,88 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import CategorySection from "@/components/CategorySection";
 import ProductGrid from "@/components/ProductGrid";
 import Footer from "@/components/Footer";
 import ShoppingCart, { type CartItem } from "@/components/ShoppingCart";
-import { type Product } from "@/components/ProductCard";
+import CheckoutDialog from "@/components/CheckoutDialog";
+import { useProducts, useCart, useAddToCart, useUpdateCartItem, useRemoveCartItem } from "@/lib/products";
 import coralShirtImage from '@assets/generated_images/Kids_coral_t-shirt_product_a3912b82.png';
 import mintDressImage from '@assets/generated_images/Kids_mint_dress_product_59394fee.png';
 import yellowShortsImage from '@assets/generated_images/Kids_yellow_shorts_product_6ad599f2.png';
-
-// todo: remove mock functionality
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "Coral Animal Print T-Shirt",
-    price: 899,
-    originalPrice: 1299,
-    image: coralShirtImage,
-    category: "T-Shirts",
-    ageGroup: "3-5 Years",
-    sizes: ["XS", "S", "M", "L"],
-    inStock: true,
-    isNew: true,
-    discount: 31
-  },
-  {
-    id: "2",
-    name: "Mint Green Floral Dress",
-    price: 1599,
-    image: mintDressImage,
-    category: "Dresses",
-    ageGroup: "6-8 Years",
-    sizes: ["S", "M", "L", "XL"],
-    inStock: true,
-    isNew: false
-  },
-  {
-    id: "3",
-    name: "Sunny Yellow Cotton Shorts",
-    price: 699,
-    originalPrice: 999,
-    image: yellowShortsImage,
-    category: "Shorts",
-    ageGroup: "2-4 Years",
-    sizes: ["XS", "S", "M"],
-    inStock: true,
-    isNew: false,
-    discount: 30
-  },
-  {
-    id: "4",
-    name: "Rainbow Striped Top",
-    price: 799,
-    image: coralShirtImage,
-    category: "T-Shirts",
-    ageGroup: "0-2 Years",
-    sizes: ["XS", "S"],
-    inStock: false
-  },
-  {
-    id: "5",
-    name: "Ocean Blue Jumpsuit",
-    price: 1299,
-    originalPrice: 1699,
-    image: mintDressImage,
-    category: "Jumpsuits",
-    ageGroup: "3-5 Years",
-    sizes: ["XS", "S", "M"],
-    inStock: true,
-    isNew: true,
-    discount: 24
-  },
-  {
-    id: "6",
-    name: "Pink Polka Dot Skirt",
-    price: 899,
-    image: yellowShortsImage,
-    category: "Skirts",
-    ageGroup: "6-8 Years",
-    sizes: ["S", "M", "L"],
-    inStock: true
-  }
-];
+import tinyTotsIcon from '@assets/generated_images/category_tiny_tots.png';
+import littleExplorersIcon from '@assets/generated_images/category_little_explorers.png';
+import youngAdventurersIcon from '@assets/generated_images/category_young_adventurers.png';
 
 const mockCategories = [
   {
@@ -91,7 +22,7 @@ const mockCategories = [
     ageRange: "0-2 Years",
     description: "Soft, comfortable clothes for babies and toddlers",
     itemCount: 45,
-    image: coralShirtImage,
+    image: tinyTotsIcon,
     color: "#FF6B6B"
   },
   {
@@ -100,7 +31,7 @@ const mockCategories = [
     ageRange: "3-5 Years",
     description: "Durable playwear for active preschoolers",
     itemCount: 68,
-    image: mintDressImage,
+    image: littleExplorersIcon,
     color: "#4ECDC4"
   },
   {
@@ -109,7 +40,7 @@ const mockCategories = [
     ageRange: "6-8 Years",
     description: "Stylish outfits for school and play",
     itemCount: 52,
-    image: yellowShortsImage,
+    image: youngAdventurersIcon,
     color: "#FFE66D"
   },
   {
@@ -124,94 +55,86 @@ const mockCategories = [
 ];
 
 export default function Home() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [filteredProducts, setFilteredProducts] = useState(mockProducts);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const { data: dbProducts = [], isLoading } = useProducts();
+  const { data: cartData } = useCart();
+  const addToCartMutation = useAddToCart();
+  const updateCartQuantityMutation = useUpdateCartItem();
+  const removeCartItemMutation = useRemoveCartItem();
 
-  const handleSearchChange = (query: string) => {
-    console.log("Search query:", query);
-    if (!query.trim()) {
-      setFilteredProducts(mockProducts);
-      return;
+  const [_, setLocation] = useLocation();
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(() => {
+    return new URLSearchParams(window.location.search).get("search") || "";
+  });
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSearchQuery(params.get("search") || "");
+  }, [window.location.search]);
+
+  // Map API cart response to the frontend representation
+  const cartItems: CartItem[] = (cartData?.items || []).map((item: any) => ({
+    id: item.id,
+    productId: item.productId,
+    name: item.product.name,
+    price: parseFloat(item.product.price),
+    size: item.size,
+    quantity: item.quantity,
+    image: item.product.images[0] || '',
+    ageGroup: item.product.ageGroup
+  }));
+
+  const cartSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartShipping = cartSubtotal >= 999 ? 0 : 99;
+  const cartTotal = cartSubtotal + cartShipping;
+
+  const filteredProducts = dbProducts.filter(product => {
+    if (selectedAgeGroup) {
+      const ageRange = selectedAgeGroup.replace('-', '-');
+      if (!product.ageGroup.includes(ageRange)) return false;
     }
 
-    const filtered = mockProducts.filter(product =>
-      product.name.toLowerCase().includes(query.toLowerCase()) ||
-      product.category.toLowerCase().includes(query.toLowerCase()) ||
-      product.ageGroup.toLowerCase().includes(query.toLowerCase())
+    if (!searchQuery.trim()) return true;
+    return (
+      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.ageGroup.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    setFilteredProducts(filtered);
+  });
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    const url = query.trim() ? `/?search=${encodeURIComponent(query)}` : "/";
+    window.history.replaceState(null, "", url);
   };
 
   const handleAddToCart = (productId: string, size: string) => {
-    const product = mockProducts.find(p => p.id === productId);
-    if (!product) return;
-
-    const existingItem = cartItems.find(item => 
-      item.productId === productId && item.size === size
-    );
-
-    if (existingItem) {
-      setCartItems(prev => prev.map(item =>
-        item.id === existingItem.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      const newItem: CartItem = {
-        id: `cart-${Date.now()}-${productId}-${size}`,
-        productId,
-        name: product.name,
-        price: product.price,
-        size,
-        quantity: 1,
-        image: product.image,
-        ageGroup: product.ageGroup
-      };
-      setCartItems(prev => [...prev, newItem]);
-    }
+    addToCartMutation.mutate({ productId, size, quantity: 1 });
     
     // Show cart briefly after adding item
     setIsCartOpen(true);
     setTimeout(() => setIsCartOpen(false), 2000);
   };
 
-  const handleToggleFavorite = (productId: string) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(productId)) {
-        newFavorites.delete(productId);
-      } else {
-        newFavorites.add(productId);
-      }
-      return newFavorites;
-    });
-  };
+
 
   const handleUpdateCartQuantity = (itemId: string, quantity: number) => {
-    setCartItems(prev => prev.map(item =>
-      item.id === itemId ? { ...item, quantity } : item
-    ));
+    updateCartQuantityMutation.mutate({ id: itemId, quantity });
   };
 
   const handleRemoveCartItem = (itemId: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== itemId));
+    removeCartItemMutation.mutate(itemId);
   };
 
   const handleCheckout = () => {
-    console.log("Proceeding to checkout with items:", cartItems);
-    alert("Checkout functionality will be implemented in the full application!");
+    setIsCartOpen(false);
+    setIsCheckoutOpen(true);
   };
 
   const handleCategoryClick = (categoryId: string) => {
-    console.log(`Navigating to category: ${categoryId}`);
-    // Filter products by category
-    const categoryProducts = mockProducts.filter(product => {
-      const ageRange = categoryId.replace('-', '-');
-      return product.ageGroup.includes(ageRange);
-    });
-    setFilteredProducts(categoryProducts);
+    setLocation(`/category/${categoryId}`);
   };
 
   const handleShopNow = () => {
@@ -250,15 +173,22 @@ export default function Home() {
             </p>
           </div>
 
-          <ProductGrid
-            products={filteredProducts}
-            loading={false}
-            hasMore={true}
-            onLoadMore={() => console.log("Load more products")}
-            onAddToCart={handleAddToCart}
-            onToggleFavorite={handleToggleFavorite}
-            favorites={favorites}
-          />
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <span className="text-muted-foreground font-medium animate-pulse">Loading products...</span>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No products found. Please seed the database or check back later.</p>
+            </div>
+          ) : (
+            <ProductGrid
+              products={filteredProducts}
+              loading={false}
+              hasMore={false}
+              onAddToCart={handleAddToCart}
+            />
+          )}
         </div>
       </section>
 
@@ -273,6 +203,16 @@ export default function Home() {
         onUpdateQuantity={handleUpdateCartQuantity}
         onRemoveItem={handleRemoveCartItem}
         onCheckout={handleCheckout}
+      />
+
+      {/* Checkout Dialog */}
+      <CheckoutDialog
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        cartItems={cartItems}
+        subtotal={cartSubtotal}
+        shipping={cartShipping}
+        total={cartTotal}
       />
     </div>
   );

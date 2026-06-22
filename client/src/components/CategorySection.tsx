@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight } from "lucide-react";
 
@@ -24,83 +23,82 @@ export default function CategorySection({ categories, onCategoryClick }: Categor
   };
 
   return (
-    <section className="py-12" data-testid="section-categories">
-      <div className="container mx-auto px-4">
+    <section className="py-24" data-testid="section-categories">
+      <div className="container mx-auto px-6 max-w-7xl">
         {/* Section Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl md:text-4xl font-bold font-poppins mb-4" data-testid="text-categories-title">
-            Shop by Age Group
-          </h2>
-          <p className="text-lg text-muted-foreground font-open-sans max-w-2xl mx-auto" data-testid="text-categories-description">
-            Find the perfect fit for every stage of your child's growth journey
-          </p>
+        <div className="flex items-end justify-between mb-16">
+          <div>
+            <h2 className="text-4xl font-outfit font-extrabold text-accent-navy mb-3" data-testid="text-categories-title">
+              Shop by Age
+            </h2>
+            <p className="text-accent-navy/70 text-lg font-sans" data-testid="text-categories-description">
+              Find the perfect fit for your growing little one.
+            </p>
+          </div>
+          <a className="text-primary font-bold flex items-center gap-2 hover:text-primary/80 hover:underline transition-colors text-sm" href="#products-section">
+            View All <ArrowRight className="h-4 w-4" />
+          </a>
         </div>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((category) => (
-            <Card 
-              key={category.id} 
-              className="group hover-elevate cursor-pointer overflow-hidden"
-              onClick={() => handleCategoryClick(category.id)}
-              data-testid={`card-category-${category.id}`}
-            >
-              <div className="relative">
-                {/* Category Image */}
-                <div className="aspect-[4/3] overflow-hidden">
-                  <img
-                    src={category.image}
-                    alt={`${category.name} clothing collection`}
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  {/* Colored overlay */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {categories.map((category) => {
+            const isBigKids = category.name.includes("Big Kids");
+            return (
+              <div 
+                key={category.id} 
+                className="group relative bg-white p-8 rounded-3xl text-center shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden border-b-4 cursor-pointer"
+                style={{ borderBottomColor: category.color }}
+                onClick={() => handleCategoryClick(category.id)}
+                data-testid={`card-category-${category.id}`}
+              >
+                {/* Background Bubble */}
+                <div 
+                  className="absolute -top-12 -right-12 w-32 h-32 rounded-full group-hover:scale-150 transition-transform duration-500 opacity-10"
+                  style={{ backgroundColor: category.color }}
+                />
+                
+                <div className="relative z-10 flex flex-col items-center">
+                  {/* Image/Icon Container */}
                   <div 
-                    className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity"
-                    style={{ backgroundColor: category.color }}
-                  />
-                </div>
-
-                {/* Age Range Badge */}
-                <div className="absolute top-3 left-3">
-                  <div 
-                    className="px-3 py-1 rounded-full text-white text-sm font-semibold"
-                    style={{ backgroundColor: category.color }}
-                    data-testid={`badge-age-range-${category.id}`}
+                    className="w-32 h-32 mb-6 rounded-full overflow-hidden shadow-2xs border-4 flex items-center justify-center transition-transform duration-300 group-hover:scale-105"
+                    style={{ 
+                      borderColor: `${category.color}22`,
+                      backgroundColor: `${category.color}08`
+                    }}
                   >
-                    {category.ageRange}
+                    {!isBigKids ? (
+                      <img
+                        src={category.image}
+                        alt={`${category.name} clothing collection`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      // Big Kids gets the fallback leaf icon from Stitch
+                      <span className="text-emerald-500 font-bold text-5xl font-outfit select-none">
+                        🌱
+                      </span>
+                    )}
                   </div>
-                </div>
-              </div>
 
-              <CardContent className="p-4">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg font-poppins" data-testid={`text-category-name-${category.id}`}>
+                  <h3 className="font-outfit font-bold text-xl text-accent-navy mb-2" data-testid={`text-category-name-${category.id}`}>
                     {category.name}
                   </h3>
                   
-                  <p className="text-sm text-muted-foreground font-open-sans" data-testid={`text-category-description-${category.id}`}>
-                    {category.description}
+                  <p 
+                    className="text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full"
+                    style={{ 
+                      backgroundColor: `${category.color}15`,
+                      color: category.color 
+                    }}
+                    data-testid={`badge-age-range-${category.id}`}
+                  >
+                    {category.ageRange}
                   </p>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm text-muted-foreground" data-testid={`text-item-count-${category.id}`}>
-                      {category.itemCount} items
-                    </span>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="p-0 h-auto text-primary hover:text-primary/80"
-                      data-testid={`button-shop-category-${category.id}`}
-                    >
-                      Shop Now
-                      <ArrowRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>
