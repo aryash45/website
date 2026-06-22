@@ -167,6 +167,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error("[security] Failed to auto-migrate passwords:", err);
   }
 
+  app.get("/api/debug-env", async (req, res) => {
+    const dbUrl = process.env.DATABASE_URL;
+    res.json({
+      databaseUrlSet: !!dbUrl,
+      databaseUrlPrefix: dbUrl ? dbUrl.substring(0, 30) + "..." : null,
+      storageType: storage.constructor.name,
+      nodeEnv: process.env.NODE_ENV
+    });
+  });
+
   // Auth API
   app.post("/api/auth/register", async (req, res) => {
     try {
