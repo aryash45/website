@@ -3,8 +3,8 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist/public",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/uploads/(.*)", "destination": "/uploads/$1" },
-    { "source": "/((?!api|uploads).*)", "destination": "/index.html" }
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/uploads/:path*", "destination": "/uploads/:path*" },
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
