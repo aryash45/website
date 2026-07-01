@@ -10,9 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Key, Loader2, CheckSquare, Instagram, RefreshCw, Copy, Check } from "lucide-react";
+import { Plus, Edit2, Trash2, Key, Loader2, CheckSquare } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import ImageUploader from "@/components/ImageUploader";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -40,7 +41,6 @@ export default function Admin() {
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="settings">Site Settings</TabsTrigger>
           <TabsTrigger value="content">Content Blocks</TabsTrigger>
-          <TabsTrigger value="instagram">Instagram Sync</TabsTrigger>
         </TabsList>
         
         <TabsContent value="products">
@@ -57,10 +57,6 @@ export default function Admin() {
         
         <TabsContent value="content">
           <ContentBlocksManager />
-        </TabsContent>
-        
-        <TabsContent value="instagram">
-          <InstagramSyncManager />
         </TabsContent>
       </Tabs>
     </div>
@@ -399,7 +395,7 @@ function ProductsManager() {
     category: "T-Shirts",
     ageGroup: "3-5 Years",
     sizes: "XS, S, M, L",
-    images: "",
+    images: [] as string[],
     inStock: true,
     isNew: false
   });
@@ -426,7 +422,7 @@ function ProductsManager() {
         category: payload.category,
         ageGroup: payload.ageGroup,
         sizes: payload.sizes.split(",").map((s: string) => s.trim()).filter(Boolean),
-        images: payload.images ? payload.images.split(",").map((i: string) => i.trim()).filter(Boolean) : ["/logo.png"],
+        images: payload.images && payload.images.length > 0 ? payload.images : ["/logo.png"],
         inStock: payload.inStock,
         isNew: payload.isNew,
         discount: payload.originalPrice 
@@ -476,7 +472,7 @@ function ProductsManager() {
       category: product.category,
       ageGroup: product.ageGroup,
       sizes: product.sizes.join(", "),
-      images: product.images.join(", "),
+      images: product.images || [],
       inStock: product.inStock,
       isNew: product.isNew
     });
@@ -498,7 +494,7 @@ function ProductsManager() {
       category: "T-Shirts",
       ageGroup: "3-5 Years",
       sizes: "XS, S, M, L",
-      images: "",
+      images: [],
       inStock: true,
       isNew: false
     });
@@ -669,12 +665,10 @@ function ProductsManager() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="prodImages">Image URLs (comma-separated)</Label>
-              <Input
-                id="prodImages"
-                value={formData.images}
-                onChange={(e) => setFormData((p) => ({ ...p, images: e.target.value }))}
-                placeholder="e.g. attached_assets/generated_images/Kids_mint_dress_product_59394fee.png"
+              <Label>Product Images</Label>
+              <ImageUploader
+                images={formData.images}
+                onChange={(images) => setFormData((p) => ({ ...p, images }))}
               />
             </div>
 
@@ -976,506 +970,6 @@ function OrdersManager() {
               </div>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// INSTAGRAM SYNC MANAGER
-// -------------------------------------------------------------
-function InstagramSyncManager() {
-  const { toast } = useToast();
-  const [urlInput, setUrlInput] = useState("");
-  const [isCopied, setIsCopied] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  
-  // Dialog state for editing draft
-  const [selectedDraft, setSelectedDraft] = useState<any>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [extraImageUrls, setExtraImageUrls] = useState("");
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-    originalPrice: "",
-    category: "T-Shirts",
-    ageGroup: "3-5 Years",
-    sizes: "XS, S, M, L",
-    images: "",
-    inStock: true,
-    isNew: false
-  });
-
-  const webhookUrl = `${window.location.protocol}//${window.location.host}/api/sync/instagram/webhook`;
-
-  // Fetch drafts
-  const { data: drafts = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/admin/products/drafts"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/products/drafts", {
-        credentials: "include"
-      });
-      if (!res.ok) throw new Error("Failed to load drafts");
-      return res.json();
-    }
-  });
-
-  // Import mutation
-  const importMutation = useMutation({
-    mutationFn: async ({ url, extra_image_urls }: { url: string; extra_image_urls?: string }) => {
-      const res = await fetch("/api/sync/instagram/import-url", {
-        credentials: "include",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url, extra_image_urls: extra_image_urls || "" })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Failed to import URL");
-      }
-      return res.json();
-    },
-    onMutate: () => {
-      setIsImporting(true);
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/drafts"] });
-      toast({ 
-        title: "Import Successful", 
-        description: `"${data.name}" has been fetched and classified as a draft!` 
-      });
-      setUrlInput("");
-      setExtraImageUrls("");
-      setIsImporting(false);
-    },
-    onError: (error: any) => {
-      setIsImporting(false);
-      toast({ 
-
-        title: "Import Failed", 
-        description: error.message, 
-        variant: "destructive" 
-      });
-    }
-  });
-
-  // Publish mutation
-  const publishMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/admin/products/${id}/publish`, {
-        credentials: "include",
-        method: "PUT"
-      });
-      if (!res.ok) throw new Error("Failed to publish product");
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/drafts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ 
-        title: "Product Live", 
-        description: `"${data.name}" is now live on the storefront!` 
-      });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to publish product", variant: "destructive" });
-    }
-  });
-
-  // Edit draft mutation
-  const updateDraftMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const payloadBody = {
-        name: payload.name,
-        description: payload.description || "",
-        price: payload.price,
-        originalPrice: payload.originalPrice || null,
-        category: payload.category,
-        ageGroup: payload.ageGroup,
-        sizes: payload.sizes.split(",").map((s: string) => s.trim()).filter(Boolean),
-        images: payload.images ? payload.images.split(",").map((i: string) => i.trim()).filter(Boolean) : ["/logo.png"],
-        inStock: payload.inStock,
-        isNew: payload.isNew,
-        discount: payload.originalPrice 
-          ? Math.round(((parseFloat(payload.originalPrice) - parseFloat(payload.price)) / parseFloat(payload.originalPrice)) * 100)
-          : null
-      };
-
-      const res = await fetch(`/api/products/${selectedDraft.id}`, {
-        credentials: "include",
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",},
-        body: JSON.stringify(payloadBody)
-      });
-      if (!res.ok) throw new Error("Failed to update draft");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/drafts"] });
-      toast({ title: "Draft Details Updated" });
-      setIsEditDialogOpen(false);
-    }
-  });
-
-  // Delete draft mutation
-  const deleteDraftMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/products/${id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
-      if (!res.ok) throw new Error("Failed to delete draft");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/drafts"] });
-      toast({ title: "Draft Discarded" });
-    }
-  });
-
-  const handleCopyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-    toast({ title: "Copied!", description: "Webhook URL copied to clipboard" });
-  };
-
-  const handleImport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!urlInput.trim()) return;
-    importMutation.mutate({ url: urlInput.trim(), extra_image_urls: extraImageUrls.trim() });
-  };
-
-
-  const handleOpenEdit = (draft: any) => {
-    setSelectedDraft(draft);
-    setFormData({
-      name: draft.name,
-      description: draft.description || "",
-      price: draft.price.toString(),
-      originalPrice: draft.originalPrice ? draft.originalPrice.toString() : "",
-      category: draft.category,
-      ageGroup: draft.ageGroup,
-      sizes: draft.sizes.join(", "),
-      images: draft.images.join(", "),
-      inStock: draft.inStock,
-      isNew: draft.isNew
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Left Column: Sync Controls */}
-        <div className="space-y-6">
-          
-          {/* Manual Import Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Instagram className="h-5 w-5 text-[#E1306C]" />
-                Import via Post URL
-              </CardTitle>
-              <CardDescription>
-                Paste a public Instagram post or reel link below. Gemini AI will analyze the photo and caption to automatically suggest name, price, sizes, and category.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleImport} className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="https://www.instagram.com/p/..."
-                    disabled={isImporting}
-                    className="flex-1"
-                  />
-                  <Button type="submit" size="sm" disabled={isImporting || !urlInput.trim()}>
-                    {isImporting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Classifying...
-                      </>
-                    ) : (
-                      "Import"
-                    )}
-                  </Button>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground">
-                    Extra Carousel Image URLs <span className="font-normal">(for multi-image posts)</span>
-                  </Label>
-                  <Textarea
-                    value={extraImageUrls}
-                    onChange={(e) => setExtraImageUrls(e.target.value)}
-                    placeholder={"Paste each slide's image URL on a new line or comma-separated:\nhttps://cdninstagram.com/slide2.jpg\nhttps://cdninstagram.com/slide3.jpg"}
-                    disabled={isImporting}
-                    rows={3}
-                    className="text-xs font-mono"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Right-click each Instagram carousel slide → "Open image in new tab" and paste those URLs here. All images will be saved with this product.
-                  </p>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-
-
-          {/* Webhook Configuration Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <RefreshCw className="h-5 w-5 text-primary" />
-                Automated Instagram Sync
-              </CardTitle>
-              <CardDescription>
-                Every 3 days (or whenever you post), automatically import products without manual clicks. Use a free automation tool like **Make.com** or **Zapier** to forward new posts to this webhook.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Your Store Webhook Endpoint</Label>
-                <div className="flex gap-2">
-                  <Input readOnly value={webhookUrl} className="bg-muted font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={handleCopyWebhook}>
-                    {isCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="text-xs text-muted-foreground space-y-2 pt-2 border-t">
-                <p className="font-semibold text-accent-navy text-[13px]">How to set up automatic sync in Make.com:</p>
-                <ol className="list-decimal pl-4 space-y-1.5">
-                  <li>Create a free account on <strong>Make.com</strong> and start a new scenario.</li>
-                  <li>Add the first module: <strong>Instagram Business</strong> &rarr; <strong>Watch Media</strong> (connect your account).</li>
-                  <li>If you post carousels, add a <strong>Get Media Children</strong> module to list all sub-media items.</li>
-                  <li>Add an <strong>HTTP</strong> &rarr; <strong>Make a request</strong> module.</li>
-                  <li>Set Method to <strong>POST</strong> and paste the webhook URL from above.</li>
-                  <li>Set Body Type to <strong>Raw / JSON</strong> and map the following JSON object:
-                    <pre className="bg-muted p-2 rounded mt-1 font-mono text-[10px] overflow-x-auto select-all block">
-{`{
-  "media_url": "{{media_url_value}}",
-  "media_urls": ["{{media_url_value}}", "{{children_media_urls_array}}"],
-  "caption": "{{caption_value}}",
-  "id": "{{id_value}}"
-}`}
-                    </pre>
-                    <span className="text-[11px] text-muted-foreground mt-1 block">
-                      Note: You can pass a JSON array or a comma-separated list of child image URLs to <code>media_urls</code> to sync all carousel images.
-                    </span>
-                  </li>
-                </ol>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Pending Imports Review */}
-        <div>
-          <Card className="h-full">
-            <CardHeader className="flex flex-row justify-between items-center">
-              <div>
-                <CardTitle>Pending AI Approvals</CardTitle>
-                <CardDescription>Review and publish draft listings imported from Instagram</CardDescription>
-              </div>
-              <Badge variant="secondary" className="font-bold">{drafts.length} Drafts</Badge>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="py-12 text-center animate-pulse text-muted-foreground">Loading draft products...</div>
-              ) : drafts.length === 0 ? (
-                <div className="py-16 text-center border-2 border-dashed rounded-lg flex flex-col items-center justify-center space-y-2 bg-muted/10">
-                  <Instagram className="h-10 w-10 text-muted-foreground/40" />
-                  <p className="font-semibold text-muted-foreground">No pending drafts to approve</p>
-                  <p className="text-xs text-muted-foreground max-w-xs">
-                    Pasted posts or webhook updates will show up here as drafts first so you can verify prices and tags.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                  {drafts.map((draft) => (
-                    <div key={draft.id} className="flex gap-4 p-3 border rounded-lg hover:bg-muted/15 transition-colors relative group">
-                      <div className="w-20 h-24 bg-muted rounded-md overflow-hidden flex-shrink-0 border">
-                        <img src={draft.images?.[0] || "/logo.png"} alt="" className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 space-y-1.5 text-sm">
-                        <div className="flex justify-between items-start gap-2">
-                          <p className="font-bold text-accent-navy line-clamp-1">{draft.name}</p>
-                          <span className="font-extrabold text-primary">₹{draft.price}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{draft.description || "No description provided."}</p>
-                        
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          <Badge variant="outline" className="text-[10px] py-0">{draft.category}</Badge>
-                          <Badge variant="outline" className="text-[10px] py-0 bg-primary/5 text-primary border-primary/20">{draft.ageGroup}</Badge>
-                          {draft.sizes?.slice(0, 3).map((sz: string, idx: number) => (
-                            <Badge key={idx} variant="secondary" className="text-[9px] py-0 px-1">{sz}</Badge>
-                          ))}
-                          {draft.sizes?.length > 3 && (
-                            <span className="text-[10px] text-muted-foreground">+{draft.sizes.length - 3}</span>
-                          )}
-                        </div>
-
-                        <div className="flex justify-between items-center pt-2 border-t gap-2">
-                          <span className="text-[10px] font-mono text-muted-foreground">Post: {draft.instagramPostId?.slice(0, 8)}...</span>
-                          <div className="flex gap-1.5">
-                            <Button size="sm" variant="ghost" className="text-destructive h-7 text-xs" onClick={() => deleteDraftMutation.mutate(draft.id)}>
-                              Discard
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleOpenEdit(draft)}>
-                              Edit
-                            </Button>
-                            <Button size="sm" className="h-7 text-xs" onClick={() => publishMutation.mutate(draft.id)}>
-                              Publish
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Draft Editor Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="font-poppins sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Draft Product</DialogTitle>
-            <DialogDescription>Review and modify the AI-generated classification before publishing live</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); updateDraftMutation.mutate(formData); }} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="draftName">Product Title *</Label>
-              <Input
-                id="draftName"
-                value={formData.name}
-                onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="draftDesc">Description</Label>
-              <Textarea
-                id="draftDesc"
-                value={formData.description}
-                onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="draftPrice">Price (₹) *</Label>
-                <Input
-                  id="draftPrice"
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="draftOrigPrice">Original Price (₹)</Label>
-                <Input
-                  id="draftOrigPrice"
-                  type="number"
-                  value={formData.originalPrice}
-                  onChange={(e) => setFormData((p) => ({ ...p, originalPrice: e.target.value }))}
-                  placeholder="Before sale discount"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="draftCategory">Category Group *</Label>
-                <select
-                  id="draftCategory"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.category}
-                  onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
-                >
-                  <option value="T-Shirts">T-Shirts</option>
-                  <option value="Dresses">Dresses</option>
-                  <option value="Shorts">Shorts</option>
-                  <option value="Jumpsuits">Jumpsuits</option>
-                  <option value="Skirts">Skirts</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="draftAgeGroup">Age Group Range *</Label>
-                <select
-                  id="draftAgeGroup"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.ageGroup}
-                  onChange={(e) => setFormData((p) => ({ ...p, ageGroup: e.target.value }))}
-                >
-                  <option value="0-2 Years">0-2 Years</option>
-                  <option value="3-5 Years">3-5 Years</option>
-                  <option value="6-8 Years">6-8 Years</option>
-                  <option value="9-12 Years">9-12 Years</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="draftSizes">Available Sizes (comma-separated) *</Label>
-              <Input
-                id="draftSizes"
-                value={formData.sizes}
-                onChange={(e) => setFormData((p) => ({ ...p, sizes: e.target.value }))}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="draftImages">Image URLs (comma-separated)</Label>
-              <Input
-                id="draftImages"
-                value={formData.images}
-                onChange={(e) => setFormData((p) => ({ ...p, images: e.target.value }))}
-              />
-            </div>
-
-            <div className="flex gap-6 pt-2">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="draftInStock"
-                  checked={formData.inStock}
-                  onCheckedChange={(checked) => setFormData((p) => ({ ...p, inStock: checked }))}
-                />
-                <Label htmlFor="draftInStock">In Stock</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="draftIsNew"
-                  checked={formData.isNew}
-                  onCheckedChange={(checked) => setFormData((p) => ({ ...p, isNew: checked }))}
-                />
-                <Label htmlFor="draftIsNew">New Arrival</Label>
-              </div>
-            </div>
-
-            <DialogFooter className="pt-4">
-              <Button type="submit" disabled={updateDraftMutation.isPending}>
-                {updateDraftMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Draft
-              </Button>
-            </DialogFooter>
-          </form>
         </DialogContent>
       </Dialog>
     </div>

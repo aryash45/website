@@ -12,8 +12,8 @@ const app = express();
 // and cookie.secure:true silently drops the Set-Cookie header.
 app.set('trust proxy', 1);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 // Session configuration — share the single pool instance with the session store
 // so connect-pg-simple doesn't open its own separate connections.

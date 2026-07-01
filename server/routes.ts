@@ -10,6 +10,8 @@ import { classifyGarment } from "./services/gemini.js";
 import { hashPassword, comparePasswords } from "./auth.js";
 import { db } from "./db.js";
 import { eq } from "drizzle-orm";
+import fs from "fs";
+import path from "path";
 
 // ---------- Simple in-memory rate limiter for login endpoint ----------
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -29,128 +31,6 @@ function checkLoginRateLimit(ip: string): boolean {
 }
 // ---------------------------------------------------------------------
 
-// Helper functions for Instagram carousel image parsing and ranking
-function extractInstagramImageUrls(html: string): string[] {
-  const urls: string[] = [];
-  let match;
-
-  // 1. Try to look for "display_url" fields in JSON/script blocks.
-  // Example: "display_url":"https:\/\/scontent.cdninstagram.com\/..."
-  const jsonUrlsRegex = /"display_url"\s*:\s*"([^"]+)"/g;
-  while ((match = jsonUrlsRegex.exec(html)) !== null) {
-    const rawUrl = match[1];
-    const unescapedUrl = rawUrl.replace(/\\/g, '');
-    if (unescapedUrl.includes('cdninstagram.com') || unescapedUrl.includes('fbcdn.net')) {
-      if (!urls.includes(unescapedUrl)) {
-        urls.push(unescapedUrl);
-      }
-    }
-  }
-
-  // 2. Try to look for "src" inside "display_resources"
-  // Example: "src":"https:\/\/scontent.cdninstagram.com\/..."
-  const srcRegex = /"src"\s*:\s*"([^"]+)"/g;
-  while ((match = srcRegex.exec(html)) !== null) {
-    const rawUrl = match[1];
-    const unescapedUrl = rawUrl.replace(/\\/g, '');
-    if (unescapedUrl.includes('cdninstagram.com') || unescapedUrl.includes('fbcdn.net')) {
-      if (!urls.includes(unescapedUrl)) {
-        urls.push(unescapedUrl);
-      }
-    }
-  }
-
-  // 3. Look for og:image tags
-  const ogImgRegex = /<meta[^>]*property="og:image"[^>]*content="([^"]+)"/gi;
-  while ((match = ogImgRegex.exec(html)) !== null) {
-    const unescapedUrl = match[1].replace(/&amp;/g, '&');
-    if (!urls.includes(unescapedUrl)) {
-      urls.push(unescapedUrl);
-    }
-  }
-
-  // 4. Look for other meta og:image forms
-  const ogImgRegex2 = /<meta[^>]*content="([^"]+)"[^>]*property="og:image"/gi;
-  while ((match = ogImgRegex2.exec(html)) !== null) {
-    const unescapedUrl = match[1].replace(/&amp;/g, '&');
-    if (!urls.includes(unescapedUrl)) {
-      urls.push(unescapedUrl);
-    }
-  }
-
-  // 5. Look for any https links pointing directly to cdninstagram or fbcdn
-  const generalCdnRegex = /https?:[\\\/]+[^"'\s()]+(?:cdninstagram\.com|fbcdn\.net)[^"'\s()]+/gi;
-  while ((match = generalCdnRegex.exec(html)) !== null) {
-    const unescapedUrl = match[0].replace(/\\/g, '').replace(/&amp;/g, '&');
-    if (!urls.includes(unescapedUrl)) {
-      urls.push(unescapedUrl);
-    }
-  }
-
-  // Clean URLs - filter out obvious profile images
-  const filteredUrls = urls.filter(url => {
-    const lower = url.toLowerCase();
-    return !lower.includes('profile_pic') && !lower.includes('150x150') && !lower.includes('320x320');
-  });
-
-  return filteredUrls.length > 0 ? filteredUrls : urls;
-}
-
-function getInstagramFilenameId(urlStr: string): string | null {
-  try {
-    const url = new URL(urlStr);
-    const pathname = url.pathname;
-    const parts = pathname.split('/');
-    const filename = parts[parts.length - 1];
-    
-    const match = filename.match(/([a-zA-Z0-9_-]+)_[a-z]\.[a-z0-9]+$/i) || filename.match(/^([a-zA-Z0-9_-]+)\.[a-z0-9]+$/i);
-    if (match) {
-      return match[1];
-    }
-    return filename;
-  } catch {
-    const match = urlStr.match(/\/([^\/?#]+)(?:\?|#|$)/);
-    return match ? match[1] : null;
-  }
-}
-
-function scoreUrl(url: string): number {
-  let score = 0;
-  const lower = url.toLowerCase();
-  
-  if (lower.includes('s1080x1080') || lower.includes('1080x1080')) score += 10;
-  else if (lower.includes('s750x750') || lower.includes('750x750')) score += 5;
-  else if (lower.includes('s640x640') || lower.includes('640x640')) score += 2;
-  else if (lower.includes('s480x480') || lower.includes('480x480')) score += 1;
-  else if (lower.includes('s320x320') || lower.includes('320x320')) score -= 5;
-  else if (lower.includes('s150x150') || lower.includes('150x150')) score -= 10;
-  else score += 8; // default original high res
-
-  if (lower.includes('profile_pic')) score -= 20;
-  return score;
-}
-
-function getUniqueBestImages(urls: string[]): string[] {
-  const groups: Record<string, { url: string; score: number }[]> = {};
-  
-  for (const url of urls) {
-    const id = getInstagramFilenameId(url);
-    if (!id) continue;
-    
-    if (!groups[id]) {
-      groups[id] = [];
-    }
-    groups[id].push({ url, score: scoreUrl(url) });
-  }
-  
-  const bestUrls: string[] = [];
-  for (const id of Object.keys(groups)) {
-    const sorted = groups[id].sort((a, b) => b.score - a.score);
-    bestUrls.push(sorted[0].url);
-  }
-  
-  return bestUrls;
-}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auto-migrate plaintext passwords to scrypt hashes
@@ -811,215 +691,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Instagram Sync Endpoints
-  app.post("/api/sync/instagram/webhook", async (req, res) => {
+  // Admin Image Upload Endpoint (saves base64 images to local /uploads directory)
+  app.post("/api/admin/upload", adminAuth, async (req, res) => {
     try {
-      const { media_url, caption, id } = req.body;
-      if (!media_url && !req.body.media_urls && !id) {
-        return res.status(400).json({ error: "media_url/media_urls and id are required" });
+      const { filename, data } = req.body;
+      if (!filename || !data) {
+        return res.status(400).json({ error: "Filename and data are required" });
       }
 
-      const existing = await storage.getProductByInstagramId(id);
-      if (existing) {
-        return res.status(400).json({ error: "Post already imported" });
+      // Check if data is a base64 encoded data URI
+      const base64Data = data.includes(",") ? data.split(",")[1] : data;
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Ensure uploads directory exists
+      const uploadsDir = path.resolve(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      // Gather all media urls (webhook supports array/comma-separated strings or carousel_media list)
-      let urls: string[] = [];
-      if (req.body.media_urls) {
-        if (Array.isArray(req.body.media_urls)) {
-          urls = req.body.media_urls;
-        } else if (typeof req.body.media_urls === 'string') {
-          urls = req.body.media_urls.split(',').map((u: any) => u.trim());
-        }
-      }
-      if (urls.length === 0 && req.body.media_url) {
-        if (Array.isArray(req.body.media_url)) {
-          urls = req.body.media_url;
-        } else if (typeof req.body.media_url === 'string') {
-          urls = req.body.media_url.split(',').map((u: any) => u.trim());
-        }
-      }
-      if (urls.length === 0 && Array.isArray(req.body.carousel_media)) {
-        urls = req.body.carousel_media.map((item: any) => {
-          if (typeof item === 'string') return item;
-          if (item && typeof item === 'object' && item.media_url) return item.media_url;
-          return null;
-        }).filter(Boolean) as string[];
-      }
-      if (urls.length === 0 && media_url) {
-        urls = [media_url];
-      }
+      // Determine file extension
+      const ext = path.extname(filename) || ".jpg";
+      const newFilename = `${randomUUID()}${ext}`;
+      const filePath = path.join(uploadsDir, newFilename);
 
-      // Deduplicate webhook URLs
-      const uniqueUrls = urls.filter((val, index, self) => self.indexOf(val) === index);
-      const limitedUrls = uniqueUrls.slice(0, 10);
+      await fs.promises.writeFile(filePath, buffer);
 
-      console.log(`[sync] Webhook importing post ID ${id} with ${limitedUrls.length} media URLs`);
-
-      const localImagePaths: string[] = [];
-      for (const imgUrl of limitedUrls) {
-        const localPath = await downloadImage(imgUrl);
-        localImagePaths.push(localPath);
-      }
-
-      const mainLocalPath = localImagePaths.length > 0 ? localImagePaths[0] : (media_url ? await downloadImage(media_url) : "");
-      if (!mainLocalPath) {
-        return res.status(400).json({ error: "No media could be downloaded" });
-      }
-
-      const classification = await classifyGarment(mainLocalPath, caption || "");
-
-      const product = await storage.createProduct({
-        ...classification,
-        images: localImagePaths.length > 0 ? localImagePaths : [mainLocalPath],
-        instagramPostId: id,
-        status: "draft"
-      });
-
-      res.status(201).json(product);
-    } catch (error: any) {
-      console.error("[sync] Webhook error:", error);
-      res.status(500).json({ error: "Webhook import failed", details: error.message });
-    }
-  });
-
-  app.post("/api/sync/instagram/import-url", async (req, res) => {
-    try {
-      // extra_image_urls: comma/newline-separated extra image URLs (for carousel slides)
-      const { url, extra_image_urls } = req.body;
-      if (!url) {
-        return res.status(400).json({ error: "URL is required" });
-      }
-
-      // Extract post ID
-      const idMatch = url.match(/(?:\/p\/|\/reel\/|\/tv\/)([A-Za-z0-9_-]+)/);
-      const postRawId = idMatch ? idMatch[1] : null;
-      if (!postRawId) {
-        return res.status(400).json({ error: "Could not parse Instagram Post ID from URL" });
-      }
-
-      // If post already exists as a DRAFT → delete and re-import fresh.
-      // If it's already PUBLISHED → block (would create a duplicate product).
-      const existing = await storage.getProductByInstagramId(postRawId);
-      if (existing) {
-        if (existing.status === "published") {
-          return res.status(400).json({
-            error: "This post is already published as a product. Delete the product first if you want to re-import."
-          });
-        }
-        // Delete the old draft so we can start clean
-        await storage.deleteProduct(existing.id);
-        console.log(`[sync] Deleted old draft (id=${existing.id}) for post ${postRawId} — re-importing fresh`);
-      }
-
-      console.log(`[sync] Scraping Instagram URL: ${url}`);
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Instagram page: ${response.statusText}`);
-      }
-
-      const html = await response.text();
-
-      // Extract description / caption
-      const descMatch = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]+)"/i) ||
-                        html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:description"/i);
-      let rawDescription = descMatch ? descMatch[1].replace(/&amp;/g, '&') : "";
-      let caption = rawDescription;
-      const captionMatch = rawDescription.match(/on Instagram:\s*"([\s\S]*)"/i) ||
-                            rawDescription.match(/on Instagram:\s*['""]([\s\S]*?)['""].+/i) ||
-                            rawDescription.match(/:\s*"([\s\S]*)"/i);
-      if (captionMatch) caption = captionMatch[1];
-
-      // --- Gather image URLs ---
-      // 1. Scrape from HTML (usually just the og:image for single posts)
-      const foundImageUrls = extractInstagramImageUrls(html);
-      const bestImageUrls = getUniqueBestImages(foundImageUrls);
-
-      // 2. Merge with manually pasted extra_image_urls (the reliable way to get carousel slides)
-      let extraUrls: string[] = [];
-      if (extra_image_urls) {
-        const raw = typeof extra_image_urls === "string" ? extra_image_urls : String(extra_image_urls);
-        extraUrls = raw
-          .split(/[,\n]+/)
-          .map((u: string) => u.trim())
-          .filter((u: string) => u.startsWith("http"));
-      }
-
-      // Combine scraped + extra (dedup, scraped first so main image stays first)
-      const allUrls = [...bestImageUrls];
-      for (const eu of extraUrls) {
-        if (!allUrls.includes(eu)) allUrls.push(eu);
-      }
-
-      const limitedUrls = allUrls.slice(0, 10);
-      console.log(`[sync] Downloading ${limitedUrls.length} image(s) for post ${postRawId}:`, limitedUrls);
-
-      const localImagePaths: string[] = [];
-      for (const imgUrl of limitedUrls) {
-        try {
-          const localPath = await downloadImage(imgUrl);
-          localImagePaths.push(localPath);
-        } catch (dlErr: any) {
-          console.warn(`[sync] Failed to download image ${imgUrl}:`, dlErr.message);
-        }
-      }
-
-      // Fallback if nothing was downloaded
-      let mainLocalPath = localImagePaths[0] ?? null;
-      if (!mainLocalPath) {
-        console.warn("[sync] No images downloaded — using placeholder");
-        const fallbackUrl = "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?q=80&w=600";
-        mainLocalPath = await downloadImage(fallbackUrl);
-        localImagePaths.push(mainLocalPath);
-      }
-
-      // Classify garment using Gemini
-      const classification = await classifyGarment(mainLocalPath, caption);
-
-      // Create draft product
-      const draftProduct = await storage.createProduct({
-        ...classification,
-        images: localImagePaths,
-        instagramPostId: postRawId,
-        status: "draft"
-      });
-
-      res.status(201).json(draftProduct);
-    } catch (error: any) {
-      console.error("[sync] Error importing Instagram URL:", error);
-      res.status(500).json({ error: "Failed to import Instagram post", details: error.message });
-    }
-  });
-
-  app.get("/api/admin/products/drafts", adminAuth, async (req, res) => {
-    try {
-      const allProducts = await storage.getAllProducts(true);
-      const drafts = allProducts.filter(p => p.status === "draft");
-      res.json(drafts);
+      console.log(`[upload] File saved: ${filePath}`);
+      res.json({ url: `/uploads/${newFilename}` });
     } catch (error) {
-      console.error("Error fetching drafts:", error);
-      res.status(500).json({ error: "Failed to fetch drafts" });
-    }
-  });
-
-  app.put("/api/admin/products/:id/publish", adminAuth, async (req, res) => {
-    try {
-      const product = await storage.getProduct(req.params.id);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
-      const updated = await storage.updateProduct(req.params.id, { status: "published" });
-      res.json(updated);
-    } catch (error) {
-      console.error("Error publishing product:", error);
-      res.status(500).json({ error: "Failed to publish product" });
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Failed to upload image" });
     }
   });
 
