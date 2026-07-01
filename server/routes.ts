@@ -718,9 +718,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[upload] File saved: ${filePath}`);
       res.json({ url: `/uploads/${newFilename}` });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload error:", error);
-      res.status(500).json({ error: "Failed to upload image" });
+      res.status(500).json({ error: `Failed to upload image: ${error.message || String(error)}` });
     }
   });
 
