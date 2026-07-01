@@ -23,6 +23,47 @@ export default function ImageUploader({ images, onChange }: ImageUploaderProps) 
     setIsDragging(false);
   };
 
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Downscale to max 1200px width/height for database optimization
+          const MAX_SIZE = 1200;
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Convert to jpeg at 0.8 quality (very efficient file size)
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          resolve(dataUrl);
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const processFiles = async (files: FileList) => {
     setIsUploading(true);
     const newImageUrls: string[] = [];
@@ -40,39 +81,15 @@ export default function ImageUploader({ images, onChange }: ImageUploaderProps) 
         continue;
       }
 
-      // Read file and convert to base64
+      // Compress and convert to base64 locally
       try {
-        const base64Data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (error) => reject(error);
-        });
-
-        // Upload to backend
-        const response = await fetch("/api/admin/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            data: base64Data,
-          }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || "Failed to upload image.");
-        }
-
-        const data = await response.json();
-        newImageUrls.push(data.url);
+        const base64Data = await compressImage(file);
+        newImageUrls.push(base64Data);
       } catch (error: any) {
-        console.error("Upload error:", error);
+        console.error("Compression error:", error);
         toast({
-          title: "Upload Failed",
-          description: `Could not upload ${file.name}: ${error.message}`,
+          title: "Processing Failed",
+          description: `Could not process ${file.name}: ${error.message || String(error)}`,
           variant: "destructive",
         });
       }
@@ -82,7 +99,7 @@ export default function ImageUploader({ images, onChange }: ImageUploaderProps) 
       onChange([...images, ...newImageUrls]);
       toast({
         title: "Upload Successful",
-        description: `Successfully uploaded ${newImageUrls.length} image(s).`,
+        description: `Successfully added ${newImageUrls.length} image(s).`,
       });
     }
 
