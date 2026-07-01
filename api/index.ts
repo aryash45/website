@@ -61,4 +61,15 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
+// Custom error handling middleware to capture and log errors
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[Production Server Error]:', err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ 
+    error: err.message || "Internal Server Error",
+    details: err.code || undefined
+  });
+});
+
 export default app;
+
