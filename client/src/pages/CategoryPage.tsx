@@ -177,7 +177,7 @@ export default function CategoryPage() {
                       <SelectItem value="t-shirts">T-Shirts</SelectItem>
                       <SelectItem value="dresses">Dresses</SelectItem>
                       <SelectItem value="shorts">Shorts</SelectItem>
-                      <SelectItem value="jumpsuits">Jumpsuits</SelectItem>
+                      <SelectItem value="corsets">Corsets</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

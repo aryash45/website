@@ -663,7 +663,7 @@ function ProductsManager() {
                   <option value="T-Shirts">T-Shirts</option>
                   <option value="Dresses">Dresses</option>
                   <option value="Shorts">Shorts</option>
-                  <option value="Jumpsuits">Jumpsuits</option>
+                  <option value="Corsets">Corsets</option>
                   <option value="Skirts">Skirts</option>
                 </select>
               </div>

@@ -85,7 +85,7 @@ Extract and return a JSON object with these exact fields:
 2. "description": A descriptive, engaging summary of the product. Combine details from the caption and what you see in the image (e.g., fabric type, embroidery, styling).
 3. "price": The selling price in INR as a decimal string (e.g. "899.00"). Look for patterns like "899/-", "Rs.899", "₹899", "899 INR". If no price is found, default to "999.00".
 4. "originalPrice": The original price before sale (if a discount/sale is mentioned, e.g. "Was 1299 now 899") as a decimal string, or null if no original/higher price is mentioned.
-5. "category": Must be exactly one of: "T-Shirts", "Dresses", "Shorts", "Jumpsuits", "Skirts" (Choose the closest match based on the garment type).
+5. "category": Must be exactly one of: "T-Shirts", "Dresses", "Shorts", "Corsets", "Skirts" (Choose the closest match based on the garment type).
 6. "ageGroup": Must be exactly one of: "0-2 Years", "3-5 Years", "6-8 Years", "9-12 Years". Infer from sizes or age hints in the caption. If not specified, choose the best fit based on the visual model size.
 7. "sizes": An array of available kids size tags (age-based, e.g. ["0-6M", "6-12M", "1-2Y"] for babies or ["2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-9Y", "9-10Y", "10-11Y", "11-12Y"] for older kids). Use sizes appropriate to the ageGroup. If none are found, output ["2-3Y", "3-4Y", "4-5Y"].
 
@@ -99,7 +99,7 @@ Your output must be raw JSON conforming to this schema. Do not write markdown, c
     const parsed = JSON.parse(responseText.trim()) as ClassifiedProduct;
 
     // Verify categories and ageGroups match constraints
-    const validCategories = ["T-Shirts", "Dresses", "Shorts", "Jumpsuits", "Skirts"];
+    const validCategories = ["T-Shirts", "Dresses", "Shorts", "Corsets", "Skirts"];
     const validAgeGroups = ["0-2 Years", "3-5 Years", "6-8 Years", "9-12 Years"];
 
     if (!validCategories.includes(parsed.category)) {
@@ -148,8 +148,8 @@ function parseMockFallback(caption: string, defaults: ClassifiedProduct): Classi
     result.category = "Dresses";
   } else if (lowerCaption.includes("short")) {
     result.category = "Shorts";
-  } else if (lowerCaption.includes("jumpsuit") || lowerCaption.includes("romper") || lowerCaption.includes("dungaree")) {
-    result.category = "Jumpsuits";
+  } else if (lowerCaption.includes("corset") || lowerCaption.includes("jumpsuit") || lowerCaption.includes("romper") || lowerCaption.includes("dungaree")) {
+    result.category = "Corsets";
   } else if (lowerCaption.includes("t-shirt") || lowerCaption.includes("tee") || lowerCaption.includes("top")) {
     result.category = "T-Shirts";
   }
