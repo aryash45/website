@@ -42,6 +42,7 @@ export const products = pgTable("products", {
   originalPrice: decimal("original_price", { precision: 10, scale: 2 }),
   category: text("category").notNull(),
   ageGroup: text("age_group").notNull(),
+  gender: text("gender").notNull().default("Unisex"),
   sizes: text("sizes").array().notNull(),
   images: text("images").array().notNull(),
   inStock: boolean("in_stock").notNull().default(true),

@@ -10,47 +10,25 @@ import CheckoutDialog from "@/components/CheckoutDialog";
 import { useProducts, useCart, useAddToCart, useUpdateCartItem, useRemoveCartItem } from "@/lib/products";
 import coralShirtImage from '@assets/generated_images/Kids_coral_t-shirt_product_a3912b82.png';
 import mintDressImage from '@assets/generated_images/Kids_mint_dress_product_59394fee.png';
-import yellowShortsImage from '@assets/generated_images/Kids_yellow_shorts_product_6ad599f2.png';
-import tinyTotsIcon from '@assets/generated_images/category_tiny_tots.png';
-import littleExplorersIcon from '@assets/generated_images/category_little_explorers.png';
-import youngAdventurersIcon from '@assets/generated_images/category_young_adventurers.png';
 
 const mockCategories = [
   {
-    id: "0-2",
-    name: "Tiny Tots",
-    ageRange: "0-2 Years",
-    description: "Soft, comfortable clothes for babies and toddlers",
-    itemCount: 45,
-    image: tinyTotsIcon,
-    color: "#FF6B6B"
-  },
-  {
-    id: "3-5",
-    name: "Little Explorers",
-    ageRange: "3-5 Years",
-    description: "Durable playwear for active preschoolers",
-    itemCount: 68,
-    image: littleExplorersIcon,
-    color: "#4ECDC4"
-  },
-  {
-    id: "6-8",
-    name: "Young Adventurers",
-    ageRange: "6-8 Years",
-    description: "Stylish outfits for school and play",
-    itemCount: 52,
-    image: youngAdventurersIcon,
-    color: "#FFE66D"
-  },
-  {
-    id: "9-12",
-    name: "Big Kids",
-    ageRange: "9-12 Years",
-    description: "Trendy fashion for tweens and pre-teens",
-    itemCount: 39,
+    id: "boys",
+    name: "Boys",
+    ageRange: "👦 Boys",
+    description: "Cool, sporty & stylish for every boy",
+    itemCount: 0,
     image: coralShirtImage,
-    color: "#27AE60"
+    color: "#4A90D9"
+  },
+  {
+    id: "girls",
+    name: "Girls",
+    ageRange: "👧 Girls",
+    description: "Playful, vibrant & elegant for every girl",
+    itemCount: 0,
+    image: mintDressImage,
+    color: "#E05FAA"
   }
 ];
 

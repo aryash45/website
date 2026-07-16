@@ -71,13 +71,13 @@ export default function Footer() {
           <h4 className="font-headline font-bold text-xl text-[#2C3E50] dark:text-white mb-6 border-b-2 border-secondary/20 inline-block pb-1">Collections</h4>
           <ul className="space-y-4">
             {[
-              { name: "0-2 Years", href: "/category/0-2" },
-              { name: "3-5 Years", href: "/category/3-5" },
-              { name: "6-8 Years", href: "/category/6-8" },
-              { name: "9-12 Years", href: "/category/9-12" }
+              { name: "👦 Boys", href: "/category/boys" },
+              { name: "👧 Girls", href: "/category/girls" },
+              { name: "New Arrivals", href: "/new" },
+              { name: "Sale", href: "/sale" }
             ].map((category) => (
               <li key={category.href}>
-                <Link href={category.href} data-testid={`link-footer-category-${category.name.replace(/\s+/g, '-').toLowerCase()}`}>
+                <Link href={category.href} data-testid={`link-footer-category-${category.name.replace(/[\s👦👧]/g, '').toLowerCase()}`}>
                   <span className="font-body text-sm text-[#2C3E50]/80 dark:text-zinc-400 hover:text-secondary transition-colors flex items-center gap-2 cursor-pointer">
                     <span className="material-symbols-outlined text-xs">chevron_right</span>
                     {category.name}

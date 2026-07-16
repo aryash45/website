@@ -16,10 +16,8 @@ const categories = [
   { name: "New", path: "/new", hoverColor: "hover:text-accent-coral" },
   { name: "Sale", path: "/sale", hoverColor: "hover:text-accent-yellow" },
   { name: "Collections", path: "/collections", hoverColor: "hover:text-secondary" },
-  { name: "0-2 Years", path: "/category/0-2", hoverColor: "hover:text-accent-yellow" },
-  { name: "3-5 Years", path: "/category/3-5", hoverColor: "hover:text-accent-mint" },
-  { name: "6-8 Years", path: "/category/6-8", hoverColor: "hover:text-primary" },
-  { name: "9-12 Years", path: "/category/9-12", hoverColor: "hover:text-secondary" },
+  { name: "👦 Boys", path: "/category/boys", hoverColor: "hover:text-blue-500" },
+  { name: "👧 Girls", path: "/category/girls", hoverColor: "hover:text-pink-500" },
 ];
 
 interface HeaderProps {

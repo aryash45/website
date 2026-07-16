@@ -404,6 +404,7 @@ function ProductsManager() {
     originalPrice: "",
     category: "T-Shirts",
     ageGroup: "3-5 Years",
+    gender: "Unisex",
     sizes: "2-3Y, 3-4Y, 4-5Y",
     images: [] as string[],
     inStock: true,
@@ -446,6 +447,7 @@ function ProductsManager() {
         originalPrice: payload.originalPrice || null,
         category: payload.category,
         ageGroup: payload.ageGroup,
+        gender: payload.gender || "Unisex",
         sizes: payload.sizes.split(",").map((s: string) => s.trim()).filter(Boolean),
         images: payload.images && payload.images.length > 0 ? payload.images : ["/logo.png"],
         inStock: payload.inStock,
@@ -496,6 +498,7 @@ function ProductsManager() {
       originalPrice: product.originalPrice ? product.originalPrice.toString() : "",
       category: product.category,
       ageGroup: product.ageGroup,
+      gender: product.gender || "Unisex",
       sizes: product.sizes.join(", "),
       images: product.images || [],
       inStock: product.inStock,
@@ -518,6 +521,7 @@ function ProductsManager() {
       originalPrice: "",
       category: "T-Shirts",
       ageGroup: "3-5 Years",
+      gender: "Unisex",
       sizes: "2-3Y, 3-4Y, 4-5Y",
       images: [],
       inStock: true,
@@ -647,12 +651,12 @@ function ProductsManager() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="prodCategory">Category Group *</Label>
+                <Label htmlFor="prodCategory">Category *</Label>
                 <select
                   id="prodCategory"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={formData.category}
                   onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
                 >
@@ -664,10 +668,23 @@ function ProductsManager() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="prodAgeGroup">Age Group Range *</Label>
+                <Label htmlFor="prodGender">Gender *</Label>
+                <select
+                  id="prodGender"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={formData.gender}
+                  onChange={(e) => setFormData((p) => ({ ...p, gender: e.target.value }))}
+                >
+                  <option value="Boys">👦 Boys</option>
+                  <option value="Girls">👧 Girls</option>
+                  <option value="Unisex">🌈 Unisex</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prodAgeGroup">Age Group *</Label>
                 <select
                   id="prodAgeGroup"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={formData.ageGroup}
                   onChange={(e) => handleAgeGroupChange(e.target.value)}
                 >

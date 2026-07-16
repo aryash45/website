@@ -17,29 +17,21 @@ import { parseFiltersFromQuery } from "@/shared/filters";
 import { useProducts, useCart, useAddToCart, useUpdateCartItem, useRemoveCartItem } from "@/lib/products";
 
 const categoryData = {
-  "0-2": {
-    name: "Tiny Tots",
-    ageRange: "0-2 Years",
-    description: "Soft, comfortable clothes designed for babies and toddlers",
-    color: "#FF6B6B"
+  "boys": {
+    name: "Boys",
+    label: "Boys Collection",
+    description: "Cool, sporty & stylish clothes for every boy",
+    color: "#4A90D9",
+    emoji: "👦",
+    gender: "Boys"
   },
-  "3-5": {
-    name: "Little Explorers", 
-    ageRange: "3-5 Years",
-    description: "Durable playwear perfect for active preschoolers",
-    color: "#4ECDC4"
-  },
-  "6-8": {
-    name: "Young Adventurers",
-    ageRange: "6-8 Years", 
-    description: "Stylish outfits ideal for school and play",
-    color: "#FFE66D"
-  },
-  "9-12": {
-    name: "Big Kids",
-    ageRange: "9-12 Years",
-    description: "Trendy fashion for tweens and pre-teens",
-    color: "#27AE60"
+  "girls": {
+    name: "Girls",
+    label: "Girls Collection",
+    description: "Playful, vibrant & elegant outfits for every girl",
+    color: "#E05FAA",
+    emoji: "👧",
+    gender: "Girls"
   }
 };
 
@@ -107,11 +99,12 @@ export default function CategoryPage() {
     );
   }
 
-  // Filter products by category and sub-type
+  // Filter products by gender. Unisex products appear in both Boys and Girls.
   const categoryProducts = dbProducts.filter(product => {
-    const matchesAge = product.ageGroup.includes(category.ageRange);
+    const g = (product as any).gender || "Unisex";
+    const matchesGender = g === category.gender || g === "Unisex";
     const matchesType = filterByType === "all" || product.category.toLowerCase().includes(filterByType.toLowerCase());
-    return matchesAge && matchesType;
+    return matchesGender && matchesType;
   });
 
   // Sort products
@@ -133,7 +126,6 @@ export default function CategoryPage() {
   };
 
 
-
   return (
     <div className="min-h-screen bg-background" data-testid={`page-category-${categoryId}`}>
       {/* Header */}
@@ -146,15 +138,16 @@ export default function CategoryPage() {
       <section className="py-12 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-2xl mx-auto">
-            <Badge 
-              className="mb-4 text-sm px-4 py-2"
-              style={{ backgroundColor: category.color, color: 'white' }}
-              data-testid={`badge-age-range-${categoryId}`}
+            <div
+              className="inline-flex items-center gap-2 mb-4 text-sm px-4 py-2 rounded-full font-semibold text-white"
+              style={{ backgroundColor: category.color }}
+              data-testid={`badge-gender-${categoryId}`}
             >
-              {category.ageRange}
-            </Badge>
+              <span className="text-lg">{category.emoji}</span>
+              {category.label}
+            </div>
             <h1 className="text-4xl md:text-5xl font-bold font-poppins mb-4" data-testid={`text-category-title-${categoryId}`}>
-              {category.name}
+              {category.name}'s Collection
             </h1>
             <p className="text-lg text-muted-foreground font-open-sans" data-testid={`text-category-description-${categoryId}`}>
               {category.description}
