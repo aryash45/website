@@ -387,6 +387,16 @@ function ProductsManager() {
   const { toast } = useToast();
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Kids size options by age group
+  const KIDS_SIZE_OPTIONS: Record<string, string[]> = {
+    "0-2 Years":   ["0-6M", "6-12M", "1-2Y"],
+    "3-5 Years":   ["2-3Y", "3-4Y", "4-5Y"],
+    "6-8 Years":   ["5-6Y", "6-7Y", "7-8Y"],
+    "9-12 Years":  ["8-9Y", "9-10Y", "10-11Y", "11-12Y"],
+  };
+
+  const ALL_KIDS_SIZES = ["0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-9Y", "9-10Y", "10-11Y", "11-12Y"];
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -394,11 +404,26 @@ function ProductsManager() {
     originalPrice: "",
     category: "T-Shirts",
     ageGroup: "3-5 Years",
-    sizes: "XS, S, M, L",
+    sizes: "2-3Y, 3-4Y, 4-5Y",
     images: [] as string[],
     inStock: true,
     isNew: false
   });
+
+  // Toggle a single size in the comma-separated sizes string
+  const toggleSize = (size: string) => {
+    const current = formData.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+    const next = current.includes(size)
+      ? current.filter((s) => s !== size)
+      : [...current, size];
+    setFormData((p) => ({ ...p, sizes: next.join(", ") }));
+  };
+
+  // When age group changes, reset sizes to suggested defaults for that group
+  const handleAgeGroupChange = (ageGroup: string) => {
+    const suggested = KIDS_SIZE_OPTIONS[ageGroup] || [];
+    setFormData((p) => ({ ...p, ageGroup, sizes: suggested.join(", ") }));
+  };
 
   const { data: products = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/products"],
@@ -493,7 +518,7 @@ function ProductsManager() {
       originalPrice: "",
       category: "T-Shirts",
       ageGroup: "3-5 Years",
-      sizes: "XS, S, M, L",
+      sizes: "2-3Y, 3-4Y, 4-5Y",
       images: [],
       inStock: true,
       isNew: false
@@ -644,7 +669,7 @@ function ProductsManager() {
                   id="prodAgeGroup"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={formData.ageGroup}
-                  onChange={(e) => setFormData((p) => ({ ...p, ageGroup: e.target.value }))}
+                  onChange={(e) => handleAgeGroupChange(e.target.value)}
                 >
                   <option value="0-2 Years">0-2 Years</option>
                   <option value="3-5 Years">3-5 Years</option>
@@ -655,13 +680,34 @@ function ProductsManager() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="prodSizes">Available Sizes (comma-separated) *</Label>
-              <Input
-                id="prodSizes"
-                value={formData.sizes}
-                onChange={(e) => setFormData((p) => ({ ...p, sizes: e.target.value }))}
-                required
-              />
+              <Label>Available Sizes *</Label>
+              <p className="text-xs text-muted-foreground -mt-1">Sizes filtered for kids up to 12 years. Toggle to select.</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {ALL_KIDS_SIZES.map((size) => {
+                  const selectedSizes = formData.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+                  const isActive = selectedSizes.includes(size);
+                  const isSuggested = (KIDS_SIZE_OPTIONS[formData.ageGroup] || []).includes(size);
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => toggleSize(size)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
+                        isActive
+                          ? "border-primary bg-primary text-white shadow-sm"
+                          : isSuggested
+                          ? "border-primary/40 bg-primary/5 text-primary hover:border-primary/70"
+                          : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400"
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
+              </div>
+              {formData.sizes.trim() === "" && (
+                <p className="text-xs text-destructive">Please select at least one size.</p>
+              )}
             </div>
 
             <div className="space-y-2">
