@@ -449,6 +449,7 @@ export class MemStorage implements IStorage {
       originalPrice: product.originalPrice ?? null,
       category: product.category,
       ageGroup: product.ageGroup,
+      gender: product.gender ?? "Unisex",
       sizes: product.sizes,
       images: product.images,
       inStock: product.inStock ?? true,
