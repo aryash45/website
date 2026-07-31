@@ -10,8 +10,7 @@ import { classifyGarment } from "./services/gemini.js";
 import { hashPassword, comparePasswords } from "./auth.js";
 import { db } from "./db.js";
 import { eq } from "drizzle-orm";
-import fs from "fs";
-import path from "path";
+import { uploadToSupabase } from "./services/supabaseStorage.js";
 
 // ---------- Simple in-memory rate limiter for login endpoint ----------
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -691,7 +690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin Image Upload Endpoint (saves base64 images to local /uploads directory)
+  // Admin Image Upload Endpoint — uploads base64 images to Supabase Storage
   app.post("/api/admin/upload", adminAuth, async (req, res) => {
     try {
       const { filename, data } = req.body;
@@ -699,25 +698,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Filename and data are required" });
       }
 
-      // Check if data is a base64 encoded data URI
-      const base64Data = data.includes(",") ? data.split(",")[1] : data;
-      const buffer = Buffer.from(base64Data, "base64");
-
-      // Ensure uploads directory exists
-      const uploadsDir = path.resolve(process.cwd(), "uploads");
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      // Parse base64 data URI — strip the "data:<mime>;base64," prefix if present
+      let mimetype = "image/jpeg";
+      let base64Payload = data;
+      if (data.includes(",")) {
+        const [header, payload] = data.split(",");
+        base64Payload = payload;
+        // Extract mimetype from header (e.g. "data:image/png;base64")
+        const mimeMatch = header.match(/data:([^;]+);/);
+        if (mimeMatch) mimetype = mimeMatch[1];
       }
 
-      // Determine file extension
-      const ext = path.extname(filename) || ".jpg";
-      const newFilename = `${randomUUID()}${ext}`;
-      const filePath = path.join(uploadsDir, newFilename);
+      const buffer = Buffer.from(base64Payload, "base64");
 
-      await fs.promises.writeFile(filePath, buffer);
+      // Upload to Supabase Storage and get back the public CDN URL
+      const publicUrl = await uploadToSupabase(buffer, filename, mimetype);
 
-      console.log(`[upload] File saved: ${filePath}`);
-      res.json({ url: `/uploads/${newFilename}` });
+      res.json({ url: publicUrl });
     } catch (error: any) {
       console.error("Upload error:", error);
       res.status(500).json({ error: `Failed to upload image: ${error.message || String(error)}` });

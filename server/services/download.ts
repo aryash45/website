@@ -1,35 +1,27 @@
-import fs from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
-
-const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+import { uploadToSupabase } from "./supabaseStorage.js";
 
 /**
- * Downloads an image from a URL and saves it to the local /uploads folder.
- * Returns the public relative path (e.g. /uploads/abc-123.jpg)
+ * Downloads an image from a URL and uploads it to Supabase Storage.
+ * Returns the public Supabase CDN URL so it is persisted in the database.
+ *
+ * Falls back to the original URL if the upload fails so the app never breaks.
  */
 export async function downloadImage(url: string): Promise<string> {
   try {
-    // Ensure uploads directory exists
-    if (!fs.existsSync(UPLOADS_DIR)) {
-      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    }
-
     // Determine extension or fallback to .jpg
     let ext = ".jpg";
     try {
       const parsedUrl = new URL(url);
       const pathname = parsedUrl.pathname;
-      const parsedExt = path.extname(pathname);
-      if (parsedExt && [".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(parsedExt.toLowerCase())) {
+      const parsedExt = pathname.includes(".")
+        ? "." + pathname.split(".").pop()!.toLowerCase()
+        : ".jpg";
+      if ([".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(parsedExt)) {
         ext = parsedExt;
       }
     } catch {
       // Ignore URL parsing errors and fallback to .jpg
     }
-
-    const filename = `${randomUUID()}${ext}`;
-    const filePath = path.join(UPLOADS_DIR, filename);
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -37,13 +29,20 @@ export async function downloadImage(url: string): Promise<string> {
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    await fs.promises.writeFile(filePath, buffer);
 
-    console.log(`[download] Downloaded ${url} -> ${filePath}`);
-    return `/uploads/${filename}`;
+    // Determine MIME type from content-type header (fallback to jpeg)
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const mimetype = contentType.split(";")[0].trim();
+
+    const filename = `download${ext}`;
+    const publicUrl = await uploadToSupabase(buffer, filename, mimetype);
+
+    console.log(`[download] Downloaded ${url} → Supabase: ${publicUrl}`);
+    return publicUrl;
   } catch (error) {
-    console.error("[download] Error downloading image:", error);
-    // If download fails, fallback to using the original URL so the app doesn't break
+    console.error("[download] Error downloading/uploading image:", error);
+    // Fallback: use the original URL so the app doesn't break
     return url;
   }
 }
+
