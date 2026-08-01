@@ -42,9 +42,9 @@ export function useAuth() {
     fetchMe();
   }, []);
 
-  const login = async (username: string, password: string): Promise<User | null> => {
+  const login = async (username: string, password: string, rememberMe = false): Promise<User | null> => {
     try {
-      const res = await apiRequest("POST", "/api/auth/login", { username, password });
+      const res = await apiRequest("POST", "/api/auth/login", { username, password, rememberMe });
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);

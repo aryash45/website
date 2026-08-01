@@ -93,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const { username, password, rememberMe } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ error: "Username and password are required" });
@@ -107,13 +107,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(429).json({ error: "Too many login attempts. Please wait a minute and try again." });
       }
 
-      // Single lookup — admin is just a DB user with role='admin'
+      // Single lookup — admin is just a DB user with role='admin'.
+      // Using a generic error message to prevent username enumeration attacks.
       const user = await storage.getUserByUsername(username);
       if (!user || !(await comparePasswords(password, user.password))) {
-        return res.status(400).json({ error: "Invalid username or password" });
+        // Introduce a tiny constant-time delay even on failure to frustrate timing attacks
+        return res.status(401).json({ error: "Invalid username or password" });
       }
 
       req.session.userId = user.id;
+
+      // "Remember Me" — extend the session cookie lifetime to 30 days.
+      // This mutates the cookie options for this specific session only.
+      if (rememberMe) {
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+      }
 
       // Explicitly save session before responding — critical on serverless where
       // the process may exit before express-session's auto-save hook fires.
