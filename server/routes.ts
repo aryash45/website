@@ -227,20 +227,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Products API
+  // Products API (Public GET with filtering options)
   app.get("/api/products", async (req, res) => {
     try {
-      const { category, ageGroup } = req.query;
-      
-      let products;
-      if (category) {
-        products = await storage.getProductsByCategory(category as string);
-      } else if (ageGroup) {
-        products = await storage.getProductsByAgeGroup(ageGroup as string);
-      } else {
-        products = await storage.getAllProducts();
-      }
-      
+      const { category, gender, ageGroup, size, inStock } = req.query;
+
+      const parsedInStock = inStock !== undefined ? inStock === "true" || inStock === "1" : undefined;
+
+      const products = await storage.getFilteredProducts({
+        category: category as string | undefined,
+        gender: gender as string | undefined,
+        ageGroup: ageGroup as string | undefined,
+        size: size as string | undefined,
+        inStock: parsedInStock,
+      });
+
       res.json(products);
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -258,50 +259,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching product:", error);
       res.status(500).json({ error: "Failed to fetch product" });
-    }
-  });
-
-  app.post("/api/products", async (req, res) => {
-    try {
-      const validatedData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(validatedData);
-      res.status(201).json(product);
-    } catch (error) {
-      console.error("Error creating product:", error);
-      if (error instanceof ZodError) {
-        return res.status(400).json({ error: "Invalid product data", details: error });
-      }
-      res.status(500).json({ error: "Failed to create product" });
-    }
-  });
-
-  app.put("/api/products/:id", async (req, res) => {
-    try {
-      const validatedData = insertProductSchema.partial().parse(req.body);
-      const product = await storage.updateProduct(req.params.id, validatedData);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      res.json(product);
-    } catch (error) {
-      console.error("Error updating product:", error);
-      if (error instanceof ZodError) {
-        return res.status(400).json({ error: "Invalid product data", details: error });
-      }
-      res.status(500).json({ error: "Failed to update product" });
-    }
-  });
-
-  app.delete("/api/products/:id", async (req, res) => {
-    try {
-      const deleted = await storage.deleteProduct(req.params.id);
-      if (!deleted) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      res.status(500).json({ error: "Failed to delete product" });
     }
   });
 
@@ -500,6 +457,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // ---------- Admin Product Management Endpoints (Admin Only) ----------
+  const handleCreateProduct = async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertProductSchema.parse(req.body);
+      const product = await storage.createProduct(validatedData);
+      res.status(201).json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid product data", details: error });
+      }
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  };
+
+  const handleUpdateProduct = async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertProductSchema.partial().parse(req.body);
+      const product = await storage.updateProduct(req.params.id, validatedData);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: "Invalid product data", details: error });
+      }
+      res.status(500).json({ error: "Failed to update product" });
+    }
+  };
+
+  const handleDeleteProduct = async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteProduct(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  };
+
+  // Protected Admin product routes (as requested by spec: /api/admin/products)
+  app.post("/api/admin/products", adminAuth, handleCreateProduct);
+  app.patch("/api/admin/products/:id", adminAuth, handleUpdateProduct);
+  app.put("/api/admin/products/:id", adminAuth, handleUpdateProduct);
+  app.delete("/api/admin/products/:id", adminAuth, handleDeleteProduct);
+
+  // Backwards compatibility endpoints protected by adminAuth
+  app.post("/api/products", adminAuth, handleCreateProduct);
+  app.put("/api/products/:id", adminAuth, handleUpdateProduct);
+  app.delete("/api/products/:id", adminAuth, handleDeleteProduct);
 
   // Site Settings API (Admin only)
   app.get("/api/admin/settings", adminAuth, async (req, res) => {

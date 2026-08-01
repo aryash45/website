@@ -18,6 +18,14 @@ export interface IStorage {
 
   // Products
   getAllProducts(includeDrafts?: boolean): Promise<Product[]>;
+  getFilteredProducts(filters: {
+    category?: string;
+    gender?: string;
+    ageGroup?: string;
+    size?: string;
+    inStock?: boolean;
+    includeDrafts?: boolean;
+  }): Promise<Product[]>;
   getProduct(id: string): Promise<Product | undefined>;
   getProductByInstagramId(instagramPostId: string): Promise<Product | undefined>;
   getProductsByCategory(category: string, includeDrafts?: boolean): Promise<Product[]>;
@@ -97,6 +105,52 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(products).orderBy(desc(products.createdAt));
     }
     return await db.select().from(products).where(eq(products.status, "published")).orderBy(desc(products.createdAt));
+  }
+
+  async getFilteredProducts(filters: {
+    category?: string;
+    gender?: string;
+    ageGroup?: string;
+    size?: string;
+    inStock?: boolean;
+    includeDrafts?: boolean;
+  }): Promise<Product[]> {
+    const conditions = [];
+
+    if (!filters.includeDrafts) {
+      conditions.push(eq(products.status, "published"));
+    }
+
+    if (filters.category) {
+      conditions.push(eq(products.category, filters.category));
+    }
+
+    if (filters.gender) {
+      conditions.push(eq(products.gender, filters.gender));
+    }
+
+    if (filters.ageGroup) {
+      conditions.push(eq(products.ageGroup, filters.ageGroup));
+    }
+
+    if (filters.inStock !== undefined) {
+      conditions.push(eq(products.inStock, filters.inStock));
+    }
+
+    if (filters.size) {
+      // Check if size is in sizes array using postgres ARRAY contains operator
+      conditions.push(sql`${filters.size} = ANY(${products.sizes})`);
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(products).orderBy(desc(products.createdAt));
+    }
+
+    return await db
+      .select()
+      .from(products)
+      .where(and(...conditions))
+      .orderBy(desc(products.createdAt));
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
@@ -439,6 +493,36 @@ export class MemStorage implements IStorage {
     return includeDrafts ? list : list.filter(p => p.status === "published");
   }
 
+  async getFilteredProducts(filters: {
+    category?: string;
+    gender?: string;
+    ageGroup?: string;
+    size?: string;
+    inStock?: boolean;
+    includeDrafts?: boolean;
+  }): Promise<Product[]> {
+    let list = Array.from(this.products.values());
+    if (!filters.includeDrafts) {
+      list = list.filter(p => p.status === "published");
+    }
+    if (filters.category) {
+      list = list.filter(p => p.category === filters.category);
+    }
+    if (filters.gender) {
+      list = list.filter(p => p.gender === filters.gender);
+    }
+    if (filters.ageGroup) {
+      list = list.filter(p => p.ageGroup === filters.ageGroup);
+    }
+    if (filters.inStock !== undefined) {
+      list = list.filter(p => p.inStock === filters.inStock);
+    }
+    if (filters.size) {
+      list = list.filter(p => p.sizes.includes(filters.size!));
+    }
+    return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async createProduct(product: InsertProduct & { instagramPostId?: string | null; status?: string }): Promise<Product> {
     const id = Math.random().toString(36).substring(2, 9);
     const newProduct: Product = {
@@ -453,6 +537,7 @@ export class MemStorage implements IStorage {
       sizes: product.sizes,
       images: product.images,
       inStock: product.inStock ?? true,
+      stockQuantity: product.stockQuantity ?? 10,
       isNew: product.isNew ?? false,
       discount: product.discount ?? null,
       instagramPostId: product.instagramPostId ?? null,

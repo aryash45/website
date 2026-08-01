@@ -46,6 +46,7 @@ export const products = pgTable("products", {
   sizes: text("sizes").array().notNull(),
   images: text("images").array().notNull(),
   inStock: boolean("in_stock").notNull().default(true),
+  stockQuantity: integer("stock_quantity").notNull().default(10),
   isNew: boolean("is_new").notNull().default(false),
   discount: integer("discount"),
   instagramPostId: text("instagram_post_id").unique(),

@@ -382,12 +382,18 @@ function ContentBlocksManager() {
 
 // -------------------------------------------------------------
 // PRODUCTS CRUD MANAGER
+// -------------------------------------------------------------// -------------------------------------------------------------
+// PRODUCTS CRUD MANAGER
 // -------------------------------------------------------------
 function ProductsManager() {
   const { toast } = useToast();
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [quickEditProduct, setQuickEditProduct] = useState<any>(null);
+  const [quickPrice, setQuickPrice] = useState("");
+  const [quickStock, setQuickStock] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  // Kids size options by age group
+  const [isQuickEditOpen, setIsQuickEditOpen] = useState(false);
+
   const KIDS_SIZE_OPTIONS: Record<string, string[]> = {
     "0-2 Years":   ["0-6M", "6-12M", "1-2Y"],
     "3-5 Years":   ["2-3Y", "3-4Y", "4-5Y"],
@@ -407,24 +413,10 @@ function ProductsManager() {
     gender: "Unisex",
     sizes: "2-3Y, 3-4Y, 4-5Y",
     images: [] as string[],
+    stockQuantity: "10",
     inStock: true,
     isNew: false
   });
-
-  // Toggle a single size in the comma-separated sizes string
-  const toggleSize = (size: string) => {
-    const current = formData.sizes.split(",").map((s) => s.trim()).filter(Boolean);
-    const next = current.includes(size)
-      ? current.filter((s) => s !== size)
-      : [...current, size];
-    setFormData((p) => ({ ...p, sizes: next.join(", ") }));
-  };
-
-  // When age group changes, reset sizes to suggested defaults for that group
-  const handleAgeGroupChange = (ageGroup: string) => {
-    const suggested = KIDS_SIZE_OPTIONS[ageGroup] || [];
-    setFormData((p) => ({ ...p, ageGroup, sizes: suggested.join(", ") }));
-  };
 
   const { data: products = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/products"],
@@ -437,9 +429,10 @@ function ProductsManager() {
 
   const createOrUpdateMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const method = selectedProduct ? "PUT" : "POST";
-      const url = selectedProduct ? `/api/products/${selectedProduct.id}` : "/api/products";
+      const method = selectedProduct ? "PATCH" : "POST";
+      const url = selectedProduct ? `/api/admin/products/${selectedProduct.id}` : "/api/admin/products";
       
+      const parsedStock = parseInt(payload.stockQuantity) || 0;
       const payloadBody = {
         name: payload.name,
         description: payload.description || "",
@@ -450,7 +443,8 @@ function ProductsManager() {
         gender: payload.gender || "Unisex",
         sizes: payload.sizes.split(",").map((s: string) => s.trim()).filter(Boolean),
         images: payload.images && payload.images.length > 0 ? payload.images : ["/logo.png"],
-        inStock: payload.inStock,
+        stockQuantity: parsedStock,
+        inStock: parsedStock > 0 ? payload.inStock : false,
         isNew: payload.isNew,
         discount: payload.originalPrice 
           ? Math.round(((parseFloat(payload.originalPrice) - parseFloat(payload.price)) / parseFloat(payload.originalPrice)) * 100)
@@ -461,7 +455,8 @@ function ProductsManager() {
         credentials: "include",
         method,
         headers: {
-          "Content-Type": "application/json",},
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payloadBody)
       });
       if (!res.ok) throw new Error("Failed to save product");
@@ -475,9 +470,32 @@ function ProductsManager() {
     }
   });
 
+  const quickUpdateMutation = useMutation({
+    mutationFn: async ({ id, price, stockQuantity }: { id: string; price: string; stockQuantity: number }) => {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        credentials: "include",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          price,
+          stockQuantity,
+          inStock: stockQuantity > 0
+        })
+      });
+      if (!res.ok) throw new Error("Failed to update product");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({ title: "Stock & Price Updated" });
+      setIsQuickEditOpen(false);
+      setQuickEditProduct(null);
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/products/${id}`, {
+      const res = await fetch(`/api/admin/products/${id}`, {
         credentials: "include",
         method: "DELETE"
       });
@@ -499,12 +517,20 @@ function ProductsManager() {
       category: product.category,
       ageGroup: product.ageGroup,
       gender: product.gender || "Unisex",
-      sizes: product.sizes.join(", "),
+      sizes: Array.isArray(product.sizes) ? product.sizes.join(", ") : "",
       images: product.images || [],
+      stockQuantity: (product.stockQuantity ?? 10).toString(),
       inStock: product.inStock,
       isNew: product.isNew
     });
     setIsDialogOpen(true);
+  };
+
+  const handleOpenQuickEdit = (product: any) => {
+    setQuickEditProduct(product);
+    setQuickPrice(product.price.toString());
+    setQuickStock((product.stockQuantity ?? 10).toString());
+    setIsQuickEditOpen(true);
   };
 
   const handleOpenAdd = () => {
@@ -524,9 +550,27 @@ function ProductsManager() {
       gender: "Unisex",
       sizes: "2-3Y, 3-4Y, 4-5Y",
       images: [],
+      stockQuantity: "10",
       inStock: true,
       isNew: false
     });
+  };
+
+  const handleAgeGroupChange = (ageGroup: string) => {
+    const suggested = KIDS_SIZE_OPTIONS[ageGroup] || [];
+    setFormData((p) => ({
+      ...p,
+      ageGroup,
+      sizes: suggested.join(", ")
+    }));
+  };
+
+  const toggleSize = (size: string) => {
+    const current = formData.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+    const updated = current.includes(size)
+      ? current.filter((s) => s !== size)
+      : [...current, size];
+    setFormData((p) => ({ ...p, sizes: updated.join(", ") }));
   };
 
   return (
@@ -534,7 +578,7 @@ function ProductsManager() {
       <CardHeader className="flex flex-row justify-between items-center">
         <div>
           <CardTitle>Catalog Products</CardTitle>
-          <CardDescription>Inventory control panel</CardDescription>
+          <CardDescription>Inventory control panel & stock monitoring</CardDescription>
         </div>
         <Button onClick={handleOpenAdd}>
           <Plus className="h-4 w-4 mr-2" /> Add Product
@@ -551,7 +595,7 @@ function ProductsManager() {
                 <TableHead>Title</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Inventory & Stock</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -563,37 +607,58 @@ function ProductsManager() {
                   </TableCell>
                 </TableRow>
               ) : (
-                products.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      <div className="w-10 h-10 bg-muted rounded overflow-hidden">
-                        <img src={product.images?.[0] || "/logo.png"} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">{product.name}</TableCell>
-                    <TableCell>{product.category}</TableCell>
-                    <TableCell>
-                      <span className="font-semibold">₹{product.price}</span>
-                      {product.originalPrice && (
-                        <span className="text-xs text-muted-foreground line-through ml-1.5">₹{product.originalPrice}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={product.inStock ? "default" : "secondary"}>
-                        {product.inStock ? "In Stock" : "Out of Stock"}
-                      </Badge>
-                      {product.isNew && <Badge className="bg-green-600 text-white ml-1.5">New</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(product.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                products.map((product) => {
+                  const stock = product.stockQuantity ?? (product.inStock ? 10 : 0);
+                  const isLowStock = stock > 0 && stock < 5;
+                  const isOutOfStock = stock <= 0 || !product.inStock;
+
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="w-10 h-10 bg-muted rounded overflow-hidden">
+                          <img src={product.images?.[0] || "/logo.png"} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {product.name}
+                        {product.isNew && <Badge className="bg-green-600 text-white ml-2 text-[10px]">New</Badge>}
+                      </TableCell>
+                      <TableCell>{product.category}</TableCell>
+                      <TableCell>
+                        <span className="font-semibold">₹{product.price}</span>
+                        {product.originalPrice && (
+                          <span className="text-xs text-muted-foreground line-through ml-1.5">₹{product.originalPrice}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isOutOfStock ? (
+                          <Badge variant="destructive" className="font-bold">
+                            Out of Stock
+                          </Badge>
+                        ) : isLowStock ? (
+                          <Badge className="bg-amber-500 text-white font-bold animate-pulse">
+                            ⚠️ Low Stock ({stock} left)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-950/20 font-semibold">
+                            In Stock ({stock})
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenQuickEdit(product)}>
+                          Quick Stock/Price
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} title="Edit Details">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(product.id)} title="Delete Product">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -727,6 +792,36 @@ function ProductsManager() {
               )}
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="prodStockQty">Stock Quantity *</Label>
+                <Input
+                  id="prodStockQty"
+                  type="number"
+                  min="0"
+                  value={formData.stockQuantity}
+                  onChange={(e) => {
+                    const qty = e.target.value;
+                    setFormData((p) => ({
+                      ...p,
+                      stockQuantity: qty,
+                      inStock: (parseInt(qty) || 0) > 0
+                    }));
+                  }}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-6">
+                <Switch
+                  id="prodInStock"
+                  checked={formData.inStock}
+                  onCheckedChange={(checked) => setFormData((p) => ({ ...p, inStock: checked }))}
+                />
+                <Label htmlFor="prodInStock">Force In-Stock Status</Label>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Product Images</Label>
               <ImageUploader
@@ -738,20 +833,11 @@ function ProductsManager() {
             <div className="flex gap-6 pt-2">
               <div className="flex items-center space-x-2">
                 <Switch
-                  id="prodInStock"
-                  checked={formData.inStock}
-                  onCheckedChange={(checked) => setFormData((p) => ({ ...p, inStock: checked }))}
-                />
-                <Label htmlFor="prodInStock">In Stock</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
                   id="prodIsNew"
                   checked={formData.isNew}
                   onCheckedChange={(checked) => setFormData((p) => ({ ...p, isNew: checked }))}
                 />
-                <Label htmlFor="prodIsNew">New Arrival</Label>
+                <Label htmlFor="prodIsNew">Mark as New Arrival</Label>
               </div>
             </div>
 
@@ -759,6 +845,65 @@ function ProductsManager() {
               <Button type="submit" disabled={createOrUpdateMutation.isPending}>
                 {createOrUpdateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {selectedProduct ? "Update Catalog" : "Add to Catalog"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Stock & Price Update Modal */}
+      <Dialog open={isQuickEditOpen} onOpenChange={setIsQuickEditOpen}>
+        <DialogContent className="font-poppins sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Quick Inventory & Price Update</DialogTitle>
+            <DialogDescription>
+              Adjust stock count and price for <span className="font-semibold text-primary">{quickEditProduct?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (quickEditProduct) {
+                quickUpdateMutation.mutate({
+                  id: quickEditProduct.id,
+                  price: quickPrice,
+                  stockQuantity: parseInt(quickStock) || 0
+                });
+              }
+            }}
+            className="space-y-4 pt-2"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="quickPrice">Price (₹)</Label>
+              <Input
+                id="quickPrice"
+                type="number"
+                value={quickPrice}
+                onChange={(e) => setQuickPrice(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quickStock">Stock Quantity</Label>
+              <Input
+                id="quickStock"
+                type="number"
+                min="0"
+                value={quickStock}
+                onChange={(e) => setQuickStock(e.target.value)}
+                required
+              />
+              {parseInt(quickStock) < 5 && parseInt(quickStock) > 0 && (
+                <p className="text-xs text-amber-600 font-semibold">⚠️ Item will be marked as Low Stock (&lt; 5 remaining)</p>
+              )}
+              {parseInt(quickStock) <= 0 && (
+                <p className="text-xs text-destructive font-semibold">❌ Item will be marked as Out of Stock</p>
+              )}
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="submit" disabled={quickUpdateMutation.isPending}>
+                {quickUpdateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Quick Update
               </Button>
             </DialogFooter>
           </form>
