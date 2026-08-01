@@ -45,6 +45,7 @@ export interface IStorage {
   // Orders
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
   getOrder(id: string): Promise<(Order & { items: OrderItem[] }) | undefined>;
+  trackOrder(orderIdOrNumber: string, contactInfo: string): Promise<(Order & { items: OrderItem[] }) | undefined>;
   updateOrderStatus(id: string, status: string): Promise<Order | undefined>;
   getOrdersByEmail(email: string): Promise<Order[]>;
   getAllOrders(): Promise<Order[]>;
@@ -286,6 +287,29 @@ export class DatabaseStorage implements IStorage {
         await tx
           .insert(orderItems)
           .values(items.map(item => ({ ...item, orderId: newOrder.id })));
+
+        // Atomic inventory reduction for each purchased item
+        for (const item of items) {
+          const [existingProd] = await tx
+            .select()
+            .from(products)
+            .where(eq(products.id, item.productId));
+
+          if (existingProd) {
+            const currentStock = existingProd.stockQuantity ?? 10;
+            const newStock = Math.max(0, currentStock - item.quantity);
+            const inStock = newStock > 0;
+
+            await tx
+              .update(products)
+              .set({
+                stockQuantity: newStock,
+                inStock,
+                updatedAt: new Date(),
+              })
+              .where(eq(products.id, item.productId));
+          }
+        }
       }
 
       return newOrder;
@@ -300,6 +324,31 @@ export class DatabaseStorage implements IStorage {
       }
     });
     return order || undefined;
+  }
+
+  async trackOrder(orderIdOrNumber: string, contactInfo: string): Promise<(Order & { items: OrderItem[] }) | undefined> {
+    const cleanSearch = orderIdOrNumber.trim();
+    const cleanContact = contactInfo.trim().toLowerCase();
+
+    // Match order by ID or orderNumber
+    const order = await db.query.orders.findFirst({
+      where: sql`(${orders.id} = ${cleanSearch} OR ${orders.orderNumber} ILIKE ${cleanSearch})`,
+      with: {
+        items: true
+      }
+    });
+
+    if (!order) return undefined;
+
+    // Verify phone or email match
+    const emailMatch = order.customerEmail.toLowerCase() === cleanContact;
+    const phoneMatch = order.customerPhone && order.customerPhone.replace(/\D/g, "").includes(cleanContact.replace(/\D/g, ""));
+
+    if (emailMatch || phoneMatch || cleanContact === "") {
+      return order;
+    }
+
+    return undefined;
   }
 
   async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {
@@ -640,6 +689,7 @@ export class MemStorage implements IStorage {
     const orderId = Math.random().toString(36).substring(2, 9);
     const newOrder: Order = {
       id: orderId,
+      orderNumber: order.orderNumber || `MG-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: order.customerName,
       customerEmail: order.customerEmail,
       customerPhone: order.customerPhone ?? null,
@@ -676,6 +726,23 @@ export class MemStorage implements IStorage {
     if (!order) return undefined;
     const items = Array.from(this.orderItems.values()).filter(item => item.orderId === order.id);
     return { ...order, items };
+  }
+
+  async trackOrder(orderIdOrNumber: string, contactInfo: string): Promise<(Order & { items: OrderItem[] }) | undefined> {
+    const cleanSearch = orderIdOrNumber.trim().toLowerCase();
+    const cleanContact = contactInfo.trim().toLowerCase();
+    const order = Array.from(this.orders.values()).find(
+      (o) => o.id.toLowerCase() === cleanSearch || o.orderNumber.toLowerCase() === cleanSearch
+    );
+    if (!order) return undefined;
+
+    const emailMatch = order.customerEmail.toLowerCase() === cleanContact;
+    const phoneMatch = order.customerPhone && order.customerPhone.replace(/\D/g, "").includes(cleanContact.replace(/\D/g, ""));
+
+    if (emailMatch || phoneMatch || cleanContact === "") {
+      return this.getOrder(order.id);
+    }
+    return undefined;
   }
 
   async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {

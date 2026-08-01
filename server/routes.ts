@@ -11,6 +11,7 @@ import { hashPassword, comparePasswords } from "./auth.js";
 import { db } from "./db.js";
 import { eq } from "drizzle-orm";
 import { uploadToSupabase } from "./services/supabaseStorage.js";
+import { sendAdminOrderNotification } from "./services/notification.js";
 
 // ---------- Simple in-memory rate limiter for login endpoint ----------
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -376,9 +377,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { orderData, items } = req.body;
-      const validatedOrder = insertOrderSchema.parse(orderData);
-      
-      const order = await storage.createOrder(validatedOrder, items);
+
+      // Generate readable Order Tracking ID (e.g. MG-1042)
+      const randomDigits = Math.floor(1000 + Math.random() * 9000);
+      const orderNumber = orderData.orderNumber || `MG-${randomDigits}`;
+
+      const validatedOrder = insertOrderSchema.parse({
+        ...orderData,
+        orderNumber,
+      });
+
+      // Atomic order creation & inventory decrement
+      const order = await storage.createOrder(validatedOrder, items || []);
+
+      // Trigger Instant Admin Mobile Phone Alert (WhatsApp / SMS / Console)
+      sendAdminOrderNotification({
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone || "N/A",
+        customerEmail: order.customerEmail,
+        shippingAddress: order.shippingAddress as any,
+        items: items || [],
+        subtotal: order.subtotal,
+        shipping: order.shipping,
+        total: order.total,
+      }).catch((err) => console.error("Admin notification error:", err));
+
       res.status(201).json(order);
     } catch (error) {
       console.error("Error creating order:", error);
@@ -388,7 +412,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to create order" });
     }
   });
-
 
   app.get("/api/orders/:id", async (req, res) => {
     try {
@@ -419,16 +442,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/orders/track", async (req, res) => {
     try {
-      const { email, orderId } = req.query;
+      const { email, phone, orderId, query } = req.query;
       
-      if (!email || !orderId) {
-        return res.status(400).json({ error: "Email and order ID are required" });
+      const searchTarget = (orderId || query) as string;
+      const contactTarget = (email || phone) as string;
+
+      if (!searchTarget || !contactTarget) {
+        return res.status(400).json({ error: "Order Number/ID and Contact Info (Email or Phone) are required" });
       }
+
+      const order = await storage.trackOrder(searchTarget, contactTarget);
       
-      const order = await storage.getOrder(orderId as string);
-      
-      if (!order || order.customerEmail !== email) {
-        return res.status(404).json({ error: "Order not found" });
+      if (!order) {
+        return res.status(404).json({ error: "Order not found. Please check your Order ID/Number and Phone or Email." });
       }
       
       res.json(order);

@@ -47,13 +47,13 @@ export default function TrackOrder() {
     ageGroup: item.product.ageGroup
   }));
 
-  const { data: order, isLoading, error, refetch } = useQuery({
+  const { data: order, isLoading, error } = useQuery({
     queryKey: ["/api/orders/track", searchParams],
     queryFn: async () => {
       if (!searchParams) return null;
       const res = await apiRequest(
         "GET",
-        `/api/orders/track?email=${encodeURIComponent(searchParams.email)}&orderId=${encodeURIComponent(searchParams.orderId)}`
+        `/api/orders/track?orderId=${encodeURIComponent(searchParams.orderId)}&email=${encodeURIComponent(searchParams.email)}&phone=${encodeURIComponent(searchParams.email)}`
       );
       return res.json();
     },
@@ -70,7 +70,8 @@ export default function TrackOrder() {
   const getStatusStep = (status: string) => {
     switch (status?.toLowerCase()) {
       case "pending": return 0;
-      case "confirmed": return 1;
+      case "confirmed":
+      case "processing": return 1;
       case "shipped": return 2;
       case "delivered": return 3;
       default: return 0;
@@ -78,8 +79,8 @@ export default function TrackOrder() {
   };
 
   const statusSteps = [
-    { label: "Pending", icon: ClockIcon },
-    { label: "Confirmed", icon: Check },
+    { label: "Pending", icon: Package },
+    { label: "Processing", icon: Check },
     { label: "Shipped", icon: Truck },
     { label: "Delivered", icon: Home }
   ];
@@ -95,47 +96,46 @@ export default function TrackOrder() {
       />
 
       <section className="py-12 bg-muted/30">
-        <div className="container mx-auto px-4 text-center max-w-2xl">
-          <h1 className="text-4xl font-bold font-poppins mb-4">Track Your Order</h1>
+        <div className="container mx-auto px-4 text-center max-w-2xl font-poppins">
+          <h1 className="text-4xl font-black text-accent-navy mb-4">Track Your Order</h1>
           <p className="text-muted-foreground font-open-sans">
-            Enter your order ID and the email address used at checkout to track shipment status.
+            Enter your Order Tracking ID (e.g. #MG-1042) along with your Phone Number or Email address.
           </p>
         </div>
       </section>
 
       <section className="py-12">
         <div className="container mx-auto px-4 max-w-3xl">
-          <Card className="mb-8 font-poppins">
+          <Card className="mb-8 font-poppins shadow-md border-zinc-200">
             <CardHeader>
               <CardTitle className="text-xl">Search Order</CardTitle>
-              <CardDescription>All fields are required</CardDescription>
+              <CardDescription>Order Number & Contact Info</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4 items-end">
                 <div className="flex-1 space-y-2 w-full">
-                  <Label htmlFor="orderId">Order ID</Label>
+                  <Label htmlFor="orderId">Order Number / ID *</Label>
                   <Input
                     id="orderId"
                     value={orderIdInput}
                     onChange={(e) => setOrderIdInput(e.target.value)}
-                    placeholder="e.g. 5ff83..."
+                    placeholder="e.g. MG-1042"
                     required
                   />
                 </div>
                 <div className="flex-1 space-y-2 w-full">
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email">Phone Number or Email *</Label>
                   <Input
                     id="email"
-                    type="email"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="your-email@example.com"
+                    placeholder="Phone (+91 9876543210) or Email"
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full sm:w-auto" disabled={isLoading}>
+                <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-accent-coral text-white font-bold h-10 px-6 rounded-full cursor-pointer" disabled={isLoading}>
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-                  Search
+                  Track Order
                 </Button>
               </form>
             </CardContent>

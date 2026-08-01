@@ -946,7 +946,7 @@ function OrdersManager() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] });
-      toast({ title: "Order Status Updated", description: `Order is now ${data.status}` });
+      toast({ title: "Order Status Updated", description: `Order status is now ${data.status}` });
       if (selectedOrder && selectedOrder.id === data.id) {
         setSelectedOrder((prev: any) => ({ ...prev, status: data.status }));
       }
@@ -959,6 +959,115 @@ function OrdersManager() {
   const handleViewOrder = (order: any) => {
     setSelectedOrder(order);
     setIsDialogOpen(true);
+  };
+
+  const handlePrintPackingSlip = (order: any) => {
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (!printWindow) return;
+
+    const itemsHtml = (order.items || []).map((item: any) => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          <strong>${item.productName}</strong><br/>
+          <small style="color: #666;">Size: ${item.size}</small>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₹${item.price}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₹${(parseFloat(item.price) * item.quantity).toFixed(2)}</td>
+      </tr>
+    `).join("");
+
+    const addr = order.shippingAddress || {};
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Packing Slip - ${order.orderNumber || order.id}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #222; max-width: 750px; margin: 0 auto; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #FF6B6B; padding-bottom: 15px; margin-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 900; color: #1E293B; text-transform: uppercase; }
+            .badge { background: #E2E8F0; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; font-size: 14px; }
+            .box { background: #F8FAFC; padding: 15px; border-radius: 8px; border: 1px solid #E2E8F0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px; }
+            th { background: #1E293B; color: white; padding: 10px; text-align: left; }
+            .total-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-top: 2px solid #222; padding-top: 10px; }
+            .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div className="header">
+            <div class="logo">Mahajan Garments</div>
+            <div style="text-align: right;">
+              <h2 style="margin: 0; color: #1E293B;">PACKING SLIP / INVOICE</h2>
+              <p style="margin: 5px 0 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #FF6B6B;">#${order.orderNumber || order.id.slice(0, 8)}</p>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="box">
+              <h4 style="margin-top: 0; color: #1E293B; text-transform: uppercase; font-size: 12px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Shipping To:</h4>
+              <p style="margin: 0; font-weight: bold; font-size: 15px;">${order.customerName}</p>
+              <p style="margin: 4px 0;">${addr.address || ''}</p>
+              <p style="margin: 4px 0;">${addr.city || ''}, ${addr.state || ''} - ${addr.zipCode || ''}</p>
+              <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">📞 Phone: ${order.customerPhone || 'N/A'}</p>
+              <p style="margin: 2px 0 0 0; font-size: 13px; color: #555;">✉️ Email: ${order.customerEmail}</p>
+            </div>
+
+            <div class="box">
+              <h4 style="margin-top: 0; color: #1E293B; text-transform: uppercase; font-size: 12px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Order Details:</h4>
+              <p style="margin: 4px 0;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString('en-IN')}</p>
+              <p style="margin: 4px 0;"><strong>Payment Method:</strong> ${(addr.paymentMethod || 'COD').toUpperCase()}</p>
+              <p style="margin: 4px 0;"><strong>Fulfillment Status:</strong> <span class="badge" style="text-transform: capitalize;">${order.status}</span></p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item Description</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Unit Price</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div style="width: 250px; margin-left: auto;">
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;">
+              <span>Subtotal:</span>
+              <span>₹${order.subtotal}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;">
+              <span>Shipping:</span>
+              <span>${parseFloat(order.shipping) === 0 ? "FREE" : "₹" + order.shipping}</span>
+            </div>
+            <div class="total-row">
+              <span>Grand Total:</span>
+              <span style="color: #2E7D32;">₹${order.total}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Thank you for shopping with <strong>Mahajan Garments</strong>!</p>
+            <p>For support, contact us at contact@rajourikids.com</p>
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
   };
 
   // Calculate order statistics
@@ -1010,7 +1119,7 @@ function OrdersManager() {
       <Card>
         <CardHeader>
           <CardTitle>Orders List</CardTitle>
-          <CardDescription>Monitor and fulfill client orders</CardDescription>
+          <CardDescription>Monitor and fulfill client orders (newest first)</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -1019,12 +1128,12 @@ function OrdersManager() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order ID</TableHead>
+                  <TableHead>Tracking ID</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Total Price</TableHead>
-                  <TableHead>Payment Method</TableHead>
+                  <TableHead>Payment</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Fulfillment Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1040,36 +1149,43 @@ function OrdersManager() {
                     const paymentMethod = order.shippingAddress?.paymentMethod || "cod";
                     return (
                       <TableRow key={order.id}>
-                        <TableCell className="font-mono text-xs font-semibold">{order.id.slice(0, 8)}...</TableCell>
+                        <TableCell className="font-mono text-xs font-bold text-primary">
+                          #{order.orderNumber || order.id.slice(0, 8)}
+                        </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-semibold text-sm">{order.customerName}</p>
-                            <p className="text-xs text-muted-foreground">{order.customerEmail}</p>
+                            <p className="text-xs text-muted-foreground">{order.customerPhone || order.customerEmail}</p>
                           </div>
                         </TableCell>
                         <TableCell className="font-bold">₹{order.total}</TableCell>
-                        <TableCell className="capitalize text-xs font-semibold">{paymentMethod}</TableCell>
+                        <TableCell className="capitalize text-xs font-semibold">{paymentMethod.toUpperCase()}</TableCell>
                         <TableCell className="text-xs">
                           {new Date(order.createdAt).toLocaleDateString("en-IN", {
                             day: "numeric",
-                            month: "short"
+                            month: "short",
+                            year: "numeric"
                           })}
                         </TableCell>
                         <TableCell>
                           <select
                             value={order.status}
                             onChange={(e) => updateStatusMutation.mutate({ orderId: order.id, status: e.target.value })}
-                            className="text-xs font-semibold border rounded px-2 py-1 capitalize bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="text-xs font-bold border rounded px-2.5 py-1 capitalize bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                           >
-                            <option value="pending">Pending</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="delivered">Delivered</option>
+                            <option value="pending">🟡 Pending</option>
+                            <option value="processing">🔵 Processing</option>
+                            <option value="shipped">🚚 Shipped</option>
+                            <option value="delivered">✅ Delivered</option>
+                            <option value="cancelled">❌ Cancelled</option>
                           </select>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
                           <Button variant="outline" size="sm" onClick={() => handleViewOrder(order)}>
                             Details
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handlePrintPackingSlip(order)} title="Print Packing Slip / Invoice">
+                            🖨️ Invoice
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1082,29 +1198,39 @@ function OrdersManager() {
         </CardContent>
       </Card>
 
-      {/* Details Dialog */}
+      {/* Order Details & Packing Slip Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto font-poppins">
+        <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto font-poppins">
           {selectedOrder && (
             <>
               <DialogHeader>
-                <DialogTitle>Order Details</DialogTitle>
-                <DialogDescription>Reference: {selectedOrder.id}</DialogDescription>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <DialogTitle className="text-xl font-bold">Order Details</DialogTitle>
+                    <DialogDescription className="font-mono text-xs font-bold text-primary">
+                      Tracking ID: #{selectedOrder.orderNumber || selectedOrder.id}
+                    </DialogDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => handlePrintPackingSlip(selectedOrder)}>
+                    🖨️ Print Packing Slip
+                  </Button>
+                </div>
               </DialogHeader>
 
               <div className="space-y-4 pt-4 text-sm font-open-sans">
                 {/* Status selector */}
-                <div className="flex justify-between items-center bg-muted/30 p-3 rounded-lg border">
+                <div className="flex justify-between items-center bg-muted/40 p-3 rounded-xl border">
                   <span className="font-bold text-xs uppercase tracking-wider text-accent-navy">Fulfillment Status</span>
                   <select
                     value={selectedOrder.status}
                     onChange={(e) => updateStatusMutation.mutate({ orderId: selectedOrder.id, status: e.target.value })}
-                    className="text-xs font-bold border rounded px-3 py-1.5 capitalize bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="text-xs font-bold border rounded px-3 py-1.5 capitalize bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                   >
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
+                    <option value="pending">🟡 Pending</option>
+                    <option value="processing">🔵 Processing</option>
+                    <option value="shipped">🚚 Shipped</option>
+                    <option value="delivered">✅ Delivered</option>
+                    <option value="cancelled">❌ Cancelled</option>
                   </select>
                 </div>
 
@@ -1126,7 +1252,7 @@ function OrdersManager() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Payment Method</p>
-                      <p className="font-medium text-accent-navy capitalize">{selectedOrder.shippingAddress?.paymentMethod || "cod"}</p>
+                      <p className="font-medium text-accent-navy uppercase font-mono">{selectedOrder.shippingAddress?.paymentMethod || "COD"}</p>
                     </div>
                   </div>
                 </div>
@@ -1143,7 +1269,7 @@ function OrdersManager() {
 
                 {/* Items */}
                 <div className="space-y-2">
-                  <h4 className="font-bold font-poppins text-accent-navy border-b pb-1 text-xs uppercase tracking-widest font-bold">Items</h4>
+                  <h4 className="font-bold font-poppins text-accent-navy border-b pb-1 text-xs uppercase tracking-widest font-bold">Ordered Items</h4>
                   <div className="space-y-3">
                     {selectedOrder.items?.map((item: any, idx: number) => (
                       <div key={idx} className="flex gap-3 items-center">

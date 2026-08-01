@@ -83,6 +83,8 @@ export default function CheckoutDialog({
     }
   }, [isOpen, isAuthenticated, user]);
 
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
+
   const createOrderMutation = useMutation({
     mutationFn: async (orderPayload: any) => {
       const res = await apiRequest("POST", "/api/orders", orderPayload);
@@ -90,10 +92,11 @@ export default function CheckoutDialog({
     },
     onSuccess: (data) => {
       setOrderId(data.id);
+      setOrderNumber(data.orderNumber || data.id);
       clearCartMutation.mutate();
       toast({
-        title: "Order Placed!",
-        description: `Your order has been recorded successfully. Selected: ${paymentMethod.toUpperCase()}`,
+        title: "Order Placed Successfully!",
+        description: `Order #${data.orderNumber || data.id.slice(0, 8)} confirmed. Selected: ${paymentMethod.toUpperCase()}`,
       });
     },
     onError: (err: any) => {
@@ -110,7 +113,7 @@ export default function CheckoutDialog({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleZipCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleZipCodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, "").slice(0, 6);
     setFormData((prev) => ({ ...prev, zipCode: value }));
     
@@ -122,6 +125,24 @@ export default function CheckoutDialog({
           ? "Express Delivery: 1-2 business days (Delhi NCR)" 
           : "Standard Delivery: 3-5 business days"
       });
+
+      // Automatic Pincode lookup for India to auto-fill City and State
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${value}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length > 0) {
+            const po = data[0].PostOffice[0];
+            setFormData((prev) => ({
+              ...prev,
+              city: po.District || po.Block || prev.city,
+              state: po.State || prev.state,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Pincode lookup error:", err);
+      }
     } else {
       setPincodeStatus(null);
     }
@@ -218,31 +239,36 @@ export default function CheckoutDialog({
           </div>
         ) : orderId ? (
           /* Order Complete State */
-          <div className="flex flex-col items-center text-center py-6">
+          <div className="flex flex-col items-center text-center py-6 font-poppins">
             <CheckCircle2 className="h-16 w-16 text-green-500 mb-4 animate-bounce" />
-            <DialogTitle className="text-2xl font-bold mb-2">Order Confirmed!</DialogTitle>
-            <DialogDescription className="text-muted-foreground mb-6">
-              Thank you for shopping with us. Your order details are registered.
+            <DialogTitle className="text-2xl font-black text-accent-navy mb-2">Order Confirmed! 🛍️</DialogTitle>
+            <DialogDescription className="text-muted-foreground mb-6 font-open-sans">
+              Thank you for shopping with Mahajan Garments. We have received your order!
             </DialogDescription>
             
-            <div className="bg-muted p-4 rounded-lg w-full mb-6 text-left space-y-2">
-              <div>
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">Order ID</span>
-                <p className="font-mono text-sm font-semibold select-all break-all">{orderId}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm pt-2 border-t">
+            <div className="bg-muted/40 p-5 rounded-2xl w-full mb-6 text-left space-y-3 border">
+              <div className="flex justify-between items-center pb-2 border-b">
                 <div>
-                  <span className="text-xs text-muted-foreground">Name</span>
-                  <p className="font-medium">{formData.customerName}</p>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Tracking Order ID</span>
+                  <p className="font-mono text-base font-black text-primary select-all">#{orderNumber || orderId.slice(0, 8)}</p>
+                </div>
+                <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full capitalize">
+                  {paymentMethod.toUpperCase()}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div>
+                  <span className="text-muted-foreground">Customer</span>
+                  <p className="font-semibold text-accent-navy">{formData.customerName}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Total Status</span>
-                  <p className="font-semibold text-green-600">₹{total} ({paymentMethod.toUpperCase()})</p>
+                  <span className="text-muted-foreground">Amount</span>
+                  <p className="font-bold text-green-600">₹{total}</p>
                 </div>
               </div>
             </div>
 
-            <Button onClick={handleClose} className="w-full">
+            <Button onClick={handleClose} className="w-full bg-primary hover:bg-accent-coral text-white font-bold h-11 rounded-full uppercase tracking-wider cursor-pointer">
               Continue Shopping
             </Button>
           </div>
@@ -268,12 +294,13 @@ export default function CheckoutDialog({
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2" autoComplete="on">
               <div className="space-y-2">
                 <Label htmlFor="customerName">Full Name *</Label>
                 <Input
                   id="customerName"
                   name="customerName"
+                  autoComplete="name"
                   value={formData.customerName}
                   onChange={handleChange}
                   required
@@ -288,6 +315,7 @@ export default function CheckoutDialog({
                     id="customerEmail"
                     name="customerEmail"
                     type="email"
+                    autoComplete="email"
                     value={formData.customerEmail}
                     onChange={handleChange}
                     required
@@ -300,6 +328,7 @@ export default function CheckoutDialog({
                     id="customerPhone"
                     name="customerPhone"
                     type="tel"
+                    autoComplete="tel"
                     required
                     value={formData.customerPhone}
                     onChange={handleChange}
@@ -313,10 +342,11 @@ export default function CheckoutDialog({
                 <Textarea
                   id="address"
                   name="address"
+                  autoComplete="street-address"
                   value={formData.address}
                   onChange={handleChange}
                   required
-                  placeholder="Street name, Apartment/Suite, Landmark"
+                  placeholder="Street name, House/Apartment No, Landmark"
                   rows={2}
                 />
               </div>
@@ -327,6 +357,7 @@ export default function CheckoutDialog({
                   <Input
                     id="city"
                     name="city"
+                    autoComplete="address-level2"
                     value={formData.city}
                     onChange={handleChange}
                     required
@@ -338,6 +369,7 @@ export default function CheckoutDialog({
                   <Input
                     id="state"
                     name="state"
+                    autoComplete="address-level1"
                     value={formData.state}
                     onChange={handleChange}
                     required
@@ -349,6 +381,7 @@ export default function CheckoutDialog({
                   <Input
                     id="zipCode"
                     name="zipCode"
+                    autoComplete="postal-code"
                     value={formData.zipCode}
                     onChange={handleZipCodeChange}
                     required
