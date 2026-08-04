@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://mahajangarments.com/sitemap.xml
+Sitemap: https://website-tau-eight-18.vercel.app/sitemap.xml
